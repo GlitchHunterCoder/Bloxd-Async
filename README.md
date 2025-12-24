@@ -235,25 +235,14 @@ TS.add(function* () {
 
 ## Example Developer Programs / Addons
 
-### Custom Scheduler Loop
-
-```js
-function mainLoop() {
-  while (true) {
-    tick()
-  }
-}
-```
-
----
-
 ### Debugging the Scheduler
 
 ```js
 TS.debug(true)
 
 TS.add(function* () {
-  yield
+  yield;
+  console.log(TS.stats())
   yield
 })
 ```
@@ -290,7 +279,56 @@ function* stateMachine() {
 
 TS.add(stateMachine)
 ```
-
+### More Async Addons
+Mutex
+```js
+function Mutex() {
+  let locked = false
+  let queue = []
+  return {
+    *lock() {
+      if (!locked) {
+        locked = true
+        return
+      }
+      const me = TS.id()
+      queue.push(me)
+      while (queue[0] !== me) yield
+      queue.shift()
+      locked = true
+    },
+    unlock() {
+      locked = false
+    }
+  }
+}
+```
+Actor Model
+```js
+function Actor(handler) {
+  const id = TS.add(function* () {
+    Channel.open(id)
+    while (true) {
+      const msg = Channel.recv(id)
+      if (msg) handler(msg)
+      yield
+    }
+  })
+  return {
+    send(msg) { Channel.send(msg, id) }
+  }
+}
+```
+Debounce
+```js
+function debounce(fn, ms) {
+  let timer = null
+  return (...args) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => fn(...args), ms)
+  }
+}
+```
 ---
 
 # Outro
