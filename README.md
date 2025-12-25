@@ -2,7 +2,7 @@
 ## Why it was made
 this project exists becuase i saw how under userused and overlooked generator functions were
 and i saw that i could bring async back into bloxd by using them in tandem with a task scheduler
-its main feature was its unique ability to pause (`yield*`), resume (`.next()`), and pass over control (`yield*`)
+its main feature was its unique ability to pause (`yield`), resume (`.next()`), and pass over control (`yield*`)
 a feature which very little functions possessed in a non async enviroment,
 so i saw this as the perfect window to make this,
 - a month of thinking how this could be used,
@@ -62,16 +62,19 @@ console.log(gen.next()) //{value:"after",done:true}
 # User Notes
 
 ## All User Features
- - `TS.add`: adds a new task to the TaskScheduler
- - `TS.tick`: used in tick callback
- - `sleep`: makes code sleep for N milliseconds before continuing operation
- - `setTimeout, setInterval`: sets a Timeout (code which runs after N milliseconds) or Interval (code which runs at every N millisecond interval)
- - `clearTimeout, clearInterval`: clears a Timeout or Interval
- - `queueMicrotask, nextTick, override, idle`: executes code at a different priority level, namely: 1, 2, Infinity, and -Infinity respectively
- - `await`: pauses the current code and runs function until its finished before giving result back to main function
- - Custom `Promise`: sets code which will either resolve or reject at a future point in time
- - `Channel`: allows code to communicate with each other across task instances
- - `ThreadManager`: allows code to be ran in a seperate task before being handed back to the main task
+ - TS functions
+   - `TS.add`: adds a new task to the TaskScheduler
+   - `TS.tick`: used in tick callback
+ - small addons
+   - `sleep`: makes code sleep for N milliseconds before continuing operation
+   - `setTimeout, setInterval`: sets a Timeout (code which runs after N milliseconds) or Interval (code which runs at every N millisecond interval)
+   - `clearTimeout, clearInterval`: clears a Timeout or Interval
+   - `queueMicrotask, nextTick, override, idle`: executes code at a different priority level, namely: 1, 2, Infinity, and -Infinity respectively
+   - `await`: pauses the current code and runs function until its finished before giving result back to main function
+ - Packages added (can be removed)
+   - Custom `Promise`: sets code which will either resolve or reject at a future point in time
+   - `Channel`: allows code to communicate with each other across task instances
+   - `ThreadManager`: allows code to be ran in a seperate task before being handed back to the main task
 
 ---
 
@@ -152,7 +155,7 @@ TS.add(function* () {
   const result = yield* await(function* () {
     yield* sleep(200)
     return 42
-  }) //it awaits a result
+  }) //it awaits a result before continuing main function
   console.log("Result:", result)
 })
 ```
@@ -194,7 +197,7 @@ TS.add(function* () {
       break
     }
     yield
-  }
+  } //waits until it receives a message, then console logs it
 })
 
 TS.add(function* () {
@@ -214,7 +217,7 @@ TS.add(function* () {
     return "Work done"
   })
   console.log(result)
-}) //executes in a different thread
+}) //executes in a different task, before giving result back to main function
 ```
 
 ---
@@ -223,13 +226,20 @@ TS.add(function* () {
 
 ## All Developer Features
 
-* `TaskScheduler`
-* Priority-based round-robin scheduling
-* Generator normalization (`TS.init`)
-* Manual tick loop
-* Custom Promise iterator protocol
-* Message routing via task IDs
-* Channel lifecycle management
+ - `TaskScheduler`
+   - the backend functionality of TS
+ - Priority-based round-robin scheduling
+   - allows you to run code which is executed before less important code
+ - Generator normalization (`TS.init`)
+   - automatically turns any given task into a generator
+ - Manual tick loop
+   - allows you to easily put into tick as is or modify when ticks get executed
+ - Custom Promise iterator protocol
+   - part of the package allows promises to be interacted like a generator
+ - Message routing via task IDs
+   - allows ease of sending and receiving by remembering
+ - Channel lifecycle management
+   - automatically kills dead tasks (can be disabled in TS.tick)
 
 ---
 
@@ -238,11 +248,11 @@ TS.add(function* () {
 ### Debugging the Scheduler
 
 ```js
-TS.debug(true)
+TS.debug(true) //allows debug info to show
 
 TS.add(function* () {
   yield;
-  console.log(TS.stats())
+  console.log(TS.stats()) //shows current runtime stat at that moment
   yield
 })
 ```
@@ -253,13 +263,13 @@ TS.add(function* () {
 
 ```js
 function fetchLike(value, delay) {
-  return new Promise.PromiseImpl(resolve => {
+  return new Promise(resolve => {
     setTimeout(() => resolve(value), delay)
   })
 }
 
 TS.add(function* () {
-  const data = yield* fetchLike("data", 300)
+  const data = yield* fetchLike("data", 300) //resolves a value after some time
   console.log(data)
 })
 ```
@@ -277,7 +287,7 @@ function* stateMachine() {
   console.log("State C")
 }
 
-TS.add(stateMachine)
+TS.add(stateMachine) //an easy state machine implementation
 ```
 ### More Async Addons
 Mutex
