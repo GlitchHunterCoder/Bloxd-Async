@@ -177,7 +177,7 @@ globalThis.clearInterval = (id) => {
 globalThis.await = (fn, ...params) => {
   return TS.run(fn, ...params)
 }
-globalThis.Promise = new class {
+globalThis.Promise = class {
   constructor(executor) {
     if (executor) {
       return this.create(executor)
@@ -233,7 +233,7 @@ globalThis.Promise = new class {
       }
     }
     then(onFulfilled, onRejected) {
-      return new globalThis.Promise.PromiseImpl((resolve, reject) => {
+      return new Promise((resolve, reject) => {
         this.handlers.push({
           onFulfilled,
           onRejected,
