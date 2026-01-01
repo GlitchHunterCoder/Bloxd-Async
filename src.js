@@ -3,74 +3,113 @@ globalThis.Generator = function*(){}().constructor;
 
 class TaskScheduler {
   constructor() {
-    this.tasks = []
-    this.inx = 0
-    this.current = 0
+    this.tasksByPriority = new Map()
+    this.priorities = []
+    this.currentTask = null
     this.nextId = 1
     this.debug = false
-    this.run={keep:false,cont:false}
+    this.run = {keep:false,cont:false,iters:0}
   }
   add(gen, priority = 0) {
-    const task = { id: this.nextId++, gen, priority }
-    this.tasks.push(task)
+    let bucket = this.tasksByPriority.get(priority)
+    if (!bucket) {
+      bucket = { list: [], inx: 0 }
+      this.tasksByPriority.set(priority, bucket)
+  
+      // insert priority sorted (desc)
+      let i = 0
+      while (i < this.priorities.length && this.priorities[i] > priority) i++
+      this.priorities.splice(i, 0, priority)
+    }
+  
+    const task = {
+      id: this.nextId++,
+      gen,
+      priority,
+      index: bucket.list.length
+    }
+  
+    bucket.list.push(task)
     return task.id
   }
-  getHighestPriority() {
-    if (this.tasks.length === 0) return null
-    return Math.max(...this.tasks.map(t => t.priority))
-  }
-  next(highest) {
-    if (this.tasks.length === 0) return null
-    const same = this.tasks.filter(t => t.priority === highest)
-    if (same.length === 0) return null
-    const task = same[this.inx % same.length]
-    this.current = this.tasks.indexOf(task)
-    this.inx = (this.inx + 1) % same.length
-    return task
-  }
-  del(index = this.current) {
-    if (this.tasks.length === 0) return
-    const task = this.tasks[index]
-    Channel.close(task.id)
-    this.tasks.splice(index, 1)
-    this.inx = 0
-  }
   delById(id) {
-    const index = this.tasks.findIndex(t => t.id === id)
-    if (index !== -1) this.del(index)
+    for (const bucket of this.tasksByPriority.values()) {
+      const task = bucket.list.find(t => t.id === id)
+      if (task) {
+        this._removeTask(task)
+        return
+      }
+    }
   }
-  keep(){
-    this.run.keep=true
+  _removeTask(task) {
+    const bucket = this.tasksByPriority.get(task.priority)
+    if (!bucket) return
+  
+    const last = bucket.list.pop()
+    if (last !== task) {
+      bucket.list[task.index] = last
+      last.index = task.index
+    }
+  
+    if (!bucket.list.length) {
+      this.tasksByPriority.delete(task.priority)
+      this.priorities.splice(this.priorities.indexOf(task.priority), 1)
+    }
+  
+    if (this.currentTask === task) {
+      this.currentTask = null
+    }
   }
-  cont(){
-    this.run.cont=true
+  keep() {
+    this.run.keep = true
+  }
+  cont() {
+    this.run.cont = true
+  }
+  iters(){
+    return this.run.iters
   }
   tick() {
-    if (this.tasks.length === 0) return
-    const highest = this.getHighestPriority()
-    if (highest === null) return
-    let task
-    if (this.run.keep) {
-      task = this.tasks[this.current]
-      this.run.keep = false
-    } else {
-      task = this.next(highest)
-    }
-    if (!task) return
-    if (this.debug) {
-      console.log(`[TASK ${task.id}] resume`)
-    }
-    const result = task.gen.next()
-    if (result.done) {
-      if (this.debug) console.log(`[TASK ${task.id}] completed`)
-      this.del()
-    } else if (this.debug) {
-      console.log(`[TASK ${task.id}] yield`)
-    }
-    if (this.run.cont) {
+    this.run.iters = 0
+    if (!this.priorities.length) return
+    do {
       this.run.cont = false
-      this.tick()
-    }
+      let task
+      if (this.run.keep && this.currentTask) {
+        task = this.currentTask
+        this.run.keep = false
+      } else {
+        const priority = this.priorities[0]
+        const bucket = this.tasksByPriority.get(priority)
+        if (!bucket || !bucket.list.length) return
+        task = bucket.list[bucket.inx]
+        bucket.inx = (bucket.inx + 1) % bucket.list.length
+        this.currentTask = task
+      }
+      if (this.debug) {
+        console.log(`[TASK ${task.id}] resume`)
+      }
+      const r = task.gen.next()
+      if (r.done) {
+        if (this.debug) {
+          console.log(`[TASK ${task.id}] completed`)
+        }
+        const bucket = this.tasksByPriority.get(task.priority)
+        const last = bucket.list.pop()
+        if (last !== task) {
+          bucket.list[task.index] = last
+          last.index = task.index
+        }
+        if (!bucket.list.length) {
+          this.tasksByPriority.delete(task.priority)
+          this.priorities.splice(this.priorities.indexOf(task.priority), 1)
+        }
+        this.currentTask = null
+      } else if (this.debug) {
+        console.log(`[TASK ${task.id}] yield`)
+      }
+      this.run.iters++
+    } while (this.run.cont)
   }
 }
 globalThis.TS = new class {
@@ -84,61 +123,58 @@ globalThis.TS = new class {
     this.gen.debug = e
     return e
   }
-  run = function* (fn, ...params) {
+  *run(fn, ...params) {
     const gen = this.init(fn, ...params)
-    let result = gen.next()
-    while (!result.done) {
+    let r = gen.next()
+    while (!r.done) {
       yield
-      result = gen.next()
+      r = gen.next()
     }
-    return result.value
+    return r.value
   }
   init(task, ...params) {
-    if (task && typeof task.next === 'function' && typeof task.throw === 'function') {
-      return task
-    }
+    if (task && typeof task.next === "function") return task
     if (typeof task === "function") {
-      const result = task(...params)
-      if (result && typeof result.next === 'function' && typeof result.throw === 'function') {
-        return result
-      }
-      return (function* () { return result })()
+      const r = task(...params)
+      if (r && typeof r.next === "function") return r
+      return (function* () { return r })()
     }
     return (function* () { return task })()
   }
   id() {
-    return this.current().id
+    if (!this.gen.currentTask) {
+      throw new Error("TS.id() called outside task")
+    }
+    return this.gen.currentTask.id
   }
   del(id) {
     this.gen.delById(id)
   }
-  current() {
-    const task = this.gen.tasks[this.gen.current]
-    if (!task) throw new Error("TS.current() called outside of a running task")
-    return task
+  keep() {
+    this.gen.keep()
+  }
+  cont() {
+    this.gen.cont()
+  }
+  iters() {
+    return this.gen.iters()
   }
   stats() {
     return {
-      tasks: this.gen.tasks,
-      nextId: this.gen.nextId,
-      current: this.gen.current,
-      inx: this.gen.inx
+      priorities: [...this.gen.priorities],
+      current: this.gen.currentTask?.id ?? null,
+      nextId: this.gen.nextId
     }
   }
-  keep(){
-    this.gen.keep()
+  tick() {
+    this.gen.tick()
   }
-  cont(){
-    this.gen.cont()
-  }
-  tick() { this.gen.tick() }
 }
 class PackageManager {
   constructor() {
     this.packs = {}
     this.init()
   }
-
   getOverride(name) {
     for (const packName in this.packs) {
       const pack = this.packs[packName]
@@ -148,14 +184,11 @@ class PackageManager {
     }
     return undefined
   }
-
   wrap(target, prefix) {
     for (const key of Object.getOwnPropertyNames(target)) {
       const original = target[key]
       if (typeof original !== "function") continue
-
       const overrideName = `${prefix}.${key}`
-
       target[key] = (...args) => {
         const fn = this.getOverride(overrideName)
         if (fn) {
@@ -165,7 +198,6 @@ class PackageManager {
       }
     }
   }
-
   init() {
     this.wrap(TS, "TS")
     this.wrap(TaskScheduler.prototype, "TaskScheduler")
