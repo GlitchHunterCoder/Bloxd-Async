@@ -1,6 +1,21 @@
 globalThis.GeneratorFunction = function*(){}.constructor;
 globalThis.Generator = function*(){}().constructor;
 
+function deepCloneMap(map) {
+  const clone = new Map()
+  for (const [key, bucket] of map) {
+    const newBucket = {
+      list: bucket.list.map(t => ({
+        ...t,
+        gen: t.gen
+      })),
+      inx: bucket.inx
+    }
+    clone.set(key, newBucket)
+  }
+  return clone
+}
+
 function deepClone(value, seen = new Map()) {
   if (value === null || typeof value !== "object") return value
   if (value instanceof Generator) return value
@@ -121,67 +136,66 @@ class TaskScheduler {
     return this.run.iters
   }
   tick() {
-    const {
-      tasksByPriority,
-      priorities,
-      run
-    } = this
-    let currentTask = this.currentTask
+    // clone transactional state
+    const snapshot = {
+      tasksByPriority: deepCloneMap(this.tasksByPriority),
+      priorities: [...this.priorities],
+      currentTask: this.currentTask
+    }
+    let { tasksByPriority, priorities, currentTask } = snapshot
+    const run = this.run // live shared state
     let iters = 0
     if (!priorities.length) {
       this.run.iters = 0
       return
     }
-    const pending = []
-    do {
-      run.cont = false
-      let task
-      let bucket
-      let nextBucketInx
-      let removeTask = false
-      if (run.keep && currentTask) {
-        task = currentTask
-        run.keep = false
-      } else {
-        const priority = priorities[0]
-        bucket = tasksByPriority.get(priority)
-        if (!bucket || !bucket.list.length) break
-        task = bucket.list[bucket.inx]
-        nextBucketInx = (bucket.inx + 1) % bucket.list.length
-      }
-      // DO NOT advance generator yet
-      pending.push(task)
-      if (!run.keep && nextBucketInx !== undefined) {
-        bucket.inx = nextBucketInx
-        currentTask = task
-      }
-      iters++
-    } while (run.cont)
-    // ==== COMMIT PHASE ====
-    for (const task of pending) {
-      if (this.debug) {
-        console.log(`[TASK ${task.id}] resume`)
-      }
-      const r = task.gen.next()
-      if (r.done) {
-        const b = tasksByPriority.get(task.priority)
-        if (!b) continue
-        const last = b.list.pop()
-        if (last !== task) {
-          b.list[task.index] = last
-          last.index = task.index
+    try {
+      do {
+        run.cont = false
+        let task
+        let bucket
+        let nextBucketInx
+        if (run.keep && currentTask) {
+          task = currentTask
+          run.keep = false
+        } else {
+          const priority = priorities[0]
+          bucket = tasksByPriority.get(priority)
+          if (!bucket || !bucket.list.length) break
+          task = bucket.list[bucket.inx]
+          nextBucketInx = (bucket.inx + 1) % bucket.list.length
         }
-        if (!b.list.length) {
-          tasksByPriority.delete(task.priority)
-          priorities.splice(priorities.indexOf(task.priority), 1)
+        if (this.debug) console.log(`[TASK ${task.id}] resume`)
+        const r = task.gen.next()
+        if (r.done) {
+          const b = tasksByPriority.get(task.priority)
+          if (b) {
+            const last = b.list.pop()
+            if (last !== task) {
+              b.list[task.index] = last
+              last.index = task.index
+            }
+            if (!b.list.length) {
+              tasksByPriority.delete(task.priority)
+              priorities.splice(priorities.indexOf(task.priority), 1)
+            }
+          }
+          if (currentTask === task) currentTask = null
+        } else {
+          currentTask = task
         }
-        if (currentTask === task) currentTask = null
-      } else {
-        currentTask = task
-      }
+        if (!run.keep && nextBucketInx !== undefined) {
+          bucket.inx = nextBucketInx
+        }
+        iters++
+      } while (run.cont)
+    } finally {
+      // commit transactional state safely
+      this.tasksByPriority = tasksByPriority
+      this.priorities = priorities
+      this.currentTask = currentTask
+      this.run.iters = iters
     }
-    this.currentTask = currentTask
-    this.run.iters = iters
   }
 }
 
