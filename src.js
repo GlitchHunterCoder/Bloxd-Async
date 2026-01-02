@@ -1,6 +1,62 @@
 globalThis.GeneratorFunction = function*(){}.constructor;
 globalThis.Generator = function*(){}().constructor;
 
+function deepClone(value, seen = new Map()) {
+  if (value === null || typeof value !== "object") return value
+  if (value instanceof Generator) return value
+  if (seen.has(value)) return seen.get(value)
+  let out
+  if (Array.isArray(value)) {
+    out = []
+    seen.set(value, out)
+    for (let i = 0; i < value.length; i++) {
+      out[i] = deepClone(value[i], seen)
+    }
+    return out
+  }
+  if (value instanceof Map) {
+    out = new Map()
+    seen.set(value, out)
+    for (const [k, v] of value.entries()) {
+      out.set(k, deepClone(v, seen))
+    }
+    return out
+  }
+  out = {}
+  seen.set(value, out)
+  for (const k of Object.keys(value)) {
+    if (k === "gen") {
+      out[k] = value[k]
+    } else {
+      out[k] = deepClone(value[k], seen)
+    }
+  }
+  return out
+}
+
+function withIdempotent(keys, fn) {
+  const originals = {}
+  const shadow = {}
+  for (const k of keys) {
+    originals[k] = globalThis[k]
+    shadow[k] = deepClone(globalThis[k])
+    globalThis[k] = shadow[k]
+  }
+  let result
+  try {
+    result = fn()
+  } catch (e) {
+    for (const k of keys) {
+      globalThis[k] = originals[k]
+    }
+    throw e
+  }
+  for (const k of keys) {
+    globalThis[k] = shadow[k]
+  }
+  return result
+}
+
 class TaskScheduler {
   constructor() {
     this.tasksByPriority = new Map()
@@ -76,38 +132,40 @@ class TaskScheduler {
       this.run.iters = 0
       return
     }
+    const pending = []
     do {
       run.cont = false
       let task
       let bucket
-      let priority
       let nextBucketInx
       let removeTask = false
       if (run.keep && currentTask) {
         task = currentTask
         run.keep = false
       } else {
-        priority = priorities[0]
+        const priority = priorities[0]
         bucket = tasksByPriority.get(priority)
         if (!bucket || !bucket.list.length) break
         task = bucket.list[bucket.inx]
         nextBucketInx = (bucket.inx + 1) % bucket.list.length
       }
+      // DO NOT advance generator yet
+      pending.push(task)
+      if (!run.keep && nextBucketInx !== undefined) {
+        bucket.inx = nextBucketInx
+        currentTask = task
+      }
+      iters++
+    } while (run.cont)
+    // ==== COMMIT PHASE ====
+    for (const task of pending) {
       if (this.debug) {
         console.log(`[TASK ${task.id}] resume`)
       }
       const r = task.gen.next()
       if (r.done) {
-        removeTask = true
-      } else {
-        currentTask = task
-      }
-      if (!run.keep && nextBucketInx !== undefined) {
-        bucket.inx = nextBucketInx
-        currentTask = task
-      }
-      if (removeTask) {
         const b = tasksByPriority.get(task.priority)
+        if (!b) continue
         const last = b.list.pop()
         if (last !== task) {
           b.list[task.index] = last
@@ -117,14 +175,16 @@ class TaskScheduler {
           tasksByPriority.delete(task.priority)
           priorities.splice(priorities.indexOf(task.priority), 1)
         }
-        currentTask = null
+        if (currentTask === task) currentTask = null
+      } else {
+        currentTask = task
       }
-      iters++
-    } while (run.cont)
+    }
     this.currentTask = currentTask
     this.run.iters = iters
   }
 }
+
 globalThis.TS = new class {
   constructor() {
     this.gen = new TaskScheduler()
@@ -180,9 +240,13 @@ globalThis.TS = new class {
     }
   }
   tick() {
-    this.gen.tick()
+    return withIdempotentGlobals(
+      ["TS"],
+      () => this.gen.tick()
+    )
   }
 }
+
 class PackageManager {
   constructor() {
     this.packs = {}
