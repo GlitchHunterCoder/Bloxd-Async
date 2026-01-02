@@ -70,46 +70,85 @@ class TaskScheduler {
     return this.run.iters
   }
   tick() {
-    this.run.iters = 0
-    if (!this.priorities.length) return
+    const {
+      tasksByPriority,
+      priorities,
+      run
+    } = this
+  
+    let currentTask = this.currentTask
+    let iters = 0
+  
+    if (!priorities.length) {
+      this.run.iters = 0
+      return
+    }
+  
     do {
-      this.run.cont = false
+      run.cont = false
+  
+      // ---- selection phase (pure) ----
       let task
-      if (this.run.keep && this.currentTask) {
-        task = this.currentTask
-        this.run.keep = false
+      let bucket
+      let priority
+      let nextBucketInx
+      let removeTask = false
+  
+      if (run.keep && currentTask) {
+        task = currentTask
+        run.keep = false
       } else {
-        const priority = this.priorities[0]
-        const bucket = this.tasksByPriority.get(priority)
-        if (!bucket || !bucket.list.length) return
+        priority = priorities[0]
+        bucket = tasksByPriority.get(priority)
+        if (!bucket || !bucket.list.length) break
+  
         task = bucket.list[bucket.inx]
-        bucket.inx = (bucket.inx + 1) % bucket.list.length
-        this.currentTask = task
+        nextBucketInx = (bucket.inx + 1) % bucket.list.length
       }
+  
       if (this.debug) {
         console.log(`[TASK ${task.id}] resume`)
       }
+  
+      // ---- execution phase (only side effects allowed) ----
       const r = task.gen.next()
+  
+      // ---- decision phase (still local) ----
       if (r.done) {
-        if (this.debug) {
-          console.log(`[TASK ${task.id}] completed`)
-        }
-        const bucket = this.tasksByPriority.get(task.priority)
-        const last = bucket.list.pop()
+        removeTask = true
+      } else {
+        currentTask = task
+      }
+  
+      // ---- commit phase (scheduler only) ----
+      if (!run.keep && nextBucketInx !== undefined) {
+        bucket.inx = nextBucketInx
+        currentTask = task
+      }
+  
+      if (removeTask) {
+        const b = tasksByPriority.get(task.priority)
+        const last = b.list.pop()
+  
         if (last !== task) {
-          bucket.list[task.index] = last
+          b.list[task.index] = last
           last.index = task.index
         }
-        if (!bucket.list.length) {
-          this.tasksByPriority.delete(task.priority)
-          this.priorities.splice(this.priorities.indexOf(task.priority), 1)
+  
+        if (!b.list.length) {
+          tasksByPriority.delete(task.priority)
+          priorities.splice(priorities.indexOf(task.priority), 1)
         }
-        this.currentTask = null
-      } else if (this.debug) {
-        console.log(`[TASK ${task.id}] yield`)
+  
+        currentTask = null
       }
-      this.run.iters++
-    } while (this.run.cont)
+  
+      iters++
+    } while (run.cont)
+  
+    // ---- final atomic commit ----
+    this.currentTask = currentTask
+    this.run.iters = iters
   }
 }
 globalThis.TS = new class {
