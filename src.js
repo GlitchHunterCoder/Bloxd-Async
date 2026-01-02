@@ -15,20 +15,16 @@ class TaskScheduler {
     if (!bucket) {
       bucket = { list: [], inx: 0 }
       this.tasksByPriority.set(priority, bucket)
-  
-      // insert priority sorted (desc)
       let i = 0
       while (i < this.priorities.length && this.priorities[i] > priority) i++
       this.priorities.splice(i, 0, priority)
     }
-  
     const task = {
       id: this.nextId++,
       gen,
       priority,
       index: bucket.list.length
     }
-  
     bucket.list.push(task)
     return task.id
   }
@@ -44,7 +40,6 @@ class TaskScheduler {
   _removeTask(task) {
     const bucket = this.tasksByPriority.get(task.priority)
     if (!bucket) return
-  
     const last = bucket.list.pop()
     if (last !== task) {
       bucket.list[task.index] = last
@@ -75,25 +70,19 @@ class TaskScheduler {
       priorities,
       run
     } = this
-  
     let currentTask = this.currentTask
     let iters = 0
-  
     if (!priorities.length) {
       this.run.iters = 0
       return
     }
-  
     do {
       run.cont = false
-  
-      // ---- selection phase (pure) ----
       let task
       let bucket
       let priority
       let nextBucketInx
       let removeTask = false
-  
       if (run.keep && currentTask) {
         task = currentTask
         run.keep = false
@@ -101,52 +90,37 @@ class TaskScheduler {
         priority = priorities[0]
         bucket = tasksByPriority.get(priority)
         if (!bucket || !bucket.list.length) break
-  
         task = bucket.list[bucket.inx]
         nextBucketInx = (bucket.inx + 1) % bucket.list.length
       }
-  
       if (this.debug) {
         console.log(`[TASK ${task.id}] resume`)
       }
-  
-      // ---- execution phase (only side effects allowed) ----
       const r = task.gen.next()
-  
-      // ---- decision phase (still local) ----
       if (r.done) {
         removeTask = true
       } else {
         currentTask = task
       }
-  
-      // ---- commit phase (scheduler only) ----
       if (!run.keep && nextBucketInx !== undefined) {
         bucket.inx = nextBucketInx
         currentTask = task
       }
-  
       if (removeTask) {
         const b = tasksByPriority.get(task.priority)
         const last = b.list.pop()
-  
         if (last !== task) {
           b.list[task.index] = last
           last.index = task.index
         }
-  
         if (!b.list.length) {
           tasksByPriority.delete(task.priority)
           priorities.splice(priorities.indexOf(task.priority), 1)
         }
-  
         currentTask = null
       }
-  
       iters++
     } while (run.cont)
-  
-    // ---- final atomic commit ----
     this.currentTask = currentTask
     this.run.iters = iters
   }
