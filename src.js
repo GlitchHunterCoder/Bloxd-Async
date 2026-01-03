@@ -80,6 +80,7 @@ class TaskScheduler {
     this.nextId = 1
     this.debug = false
     this.run = {keep:false,cont:false,iters:0}
+    this.tasksById = new Map()
   }
   add(gen, priority = 0) {
     let bucket = this.tasksByPriority.get(priority)
@@ -90,23 +91,23 @@ class TaskScheduler {
       while (i < this.priorities.length && this.priorities[i] > priority) i++
       this.priorities.splice(i, 0, priority)
     }
+  
     const task = {
       id: this.nextId++,
       gen,
       priority,
       index: bucket.list.length
     }
+  
     bucket.list.push(task)
+    this.tasksById.set(task.id, task)
+  
     return task.id
   }
   delById(id) {
-    for (const bucket of this.tasksByPriority.values()) {
-      const task = bucket.list.find(t => t.id === id)
-      if (task) {
-        this._removeTask(task)
-        return
-      }
-    }
+    const task = this.tasksById.get(id)
+    if (!task) return
+    this._removeTask(task)
   }
   _removeTask(task) {
     const bucket = this.tasksByPriority.get(task.priority)
@@ -116,12 +117,11 @@ class TaskScheduler {
       bucket.list[task.index] = last
       last.index = task.index
     }
-  
+    this.tasksById.delete(task.id)
     if (!bucket.list.length) {
       this.tasksByPriority.delete(task.priority)
       this.priorities.splice(this.priorities.indexOf(task.priority), 1)
     }
-  
     if (this.currentTask === task) {
       this.currentTask = null
     }
