@@ -254,7 +254,7 @@ globalThis.TS = new class {
     }
   }
   tick() {
-    return withIdempotentGlobals(
+    return withIdempotent(
       ["TS"],
       () => this.gen.tick()
     )
