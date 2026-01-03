@@ -10,20 +10,20 @@ ErrMsg = (e) => {
 
 class TaskScheduler {
   constructor() {
-    this.tasksByPriority = new Map();
+    this.tasksByPriority = new Map(); //change to be object, update all instances to work with object
     this.priorities = [];
     this.currentTask = null;
     this.nextId = 1;
     this.debug = false;
     this.run = { keep: false, cont: false, iters: 0 };
-    this.tasksById = new Map();
+    this.tasksById = new Map(); //change to be object, update all instances to work with object
   }
 
   add(gen, priority = 0) {
     let bucket = this.tasksByPriority.get(priority);
     if (!bucket) {
       bucket = { list: [], inx: 0 };
-      this.tasksByPriority.set(priority, bucket);
+      this.tasksByPriority.set(priority, bucket); //change L19
 
       let i = 0;
       while (i < this.priorities.length && this.priorities[i] > priority) i++;
@@ -37,8 +37,8 @@ class TaskScheduler {
       index: bucket.list.length
     };
 
-    bucket.list.push(task);
-    this.tasksById.set(task.id, task);
+    bucket.list[bucket.list.length]=task
+    this.tasksById.set(task.id, task); //change L19
     return task.id;
   }
 
@@ -48,10 +48,10 @@ class TaskScheduler {
   }
 
   _removeTask(task) {
-    const bucket = this.tasksByPriority.get(task.priority);
+    const bucket = this.tasksByPriority.get(task.priority); //change L19... stopping mentioning every time
     if (!bucket) return;
-
-    const last = bucket.list.pop();
+    const last = bucket.list[bucket.list.length-1]
+    bucket.list.length-=1
     if (last !== task) {
       bucket.list[task.index] = last;
       last.index = task.index;
