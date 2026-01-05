@@ -1,3 +1,5 @@
+- LAST STABLE : [Stable Version](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/b5c14b9d1af53ab7752e85aee6b295a9f705c448/src.js)
+
 # Introduction
 ## Why it was made
 this project exists becuase i saw how under userused and overlooked generator functions were
