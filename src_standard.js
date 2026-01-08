@@ -8,6 +8,11 @@ const ErrMsg = (e) => {
   );
 };
 
+const Try=(fn,...params)=>{
+  try { fn(...params) }
+  catch (e) { ErrMsg(e); }
+}
+
 class TaskScheduler {
   constructor() {
     this.tasksByPriority = {}
@@ -215,6 +220,7 @@ class PackageManager {
       }
     }
 
+    // remove any flattened globals
     const flatKeys = this.flattenMap[name];
     if (flatKeys) {
       for (let k of flatKeys) delete globalThis[k];
@@ -256,6 +262,7 @@ class PackageManager {
     this.wrap(TaskScheduler.prototype, "TaskScheduler");
   }
 
+  // new methods to handle global flattening
   globalExport(name, alias) {
     const pkg = this.run(name);
     if (!pkg) throw new Error(`Package "${name}" not found`);
@@ -298,14 +305,18 @@ globalThis.PM = (() => {
     delete: (n) => mod.delete(n),
     override: (n) => mod.getOverride(n),
 
-    localExport: (name, value) => mod.add(name, value),
+    // new exports
+    localExport: (name, value) => {
+      mod.add(name, value);
+      return value;
+    },
     globalExport: (name, alias) => mod.globalExport(name, alias),
+
     localDelete: (name) => mod.delete(name),
     globalDelete: (name) => mod.globalDelete(name)
   };
 })();
 
 function tick() {
-  try { TS.tick(); }
-  catch (e) { ErrMsg(e); }
+  Try(TS.tick)
 }
