@@ -79,7 +79,8 @@ console.log(gen.next()) //{value:"after",done:true}
 ---
 
 ## Example Uses of Each User Feature
-
+> [!NOTE]
+> These examples are used after the respective packages are installed
 ### Running Tasks
 
 ```js
