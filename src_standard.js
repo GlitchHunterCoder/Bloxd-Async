@@ -189,6 +189,7 @@ class PackageManager {
   constructor() {
     this.packs = Object.create(null);
     this.overrideIndex = Object.create(null);
+    this.flattenMap = Object.create(null); // track keys flattened to globalThis
     this.init();
   }
 
@@ -212,6 +213,12 @@ class PackageManager {
       for (let i = 0; i < keys.length; i++) {
         delete this.overrideIndex[keys[i]];
       }
+    }
+
+    const flatKeys = this.flattenMap[name];
+    if (flatKeys) {
+      for (let k of flatKeys) delete globalThis[k];
+      delete this.flattenMap[name];
     }
 
     delete this.packs[name];
@@ -248,6 +255,38 @@ class PackageManager {
     this.wrap(TS, "TS");
     this.wrap(TaskScheduler.prototype, "TaskScheduler");
   }
+
+  globalExport(name, alias) {
+    const pkg = this.run(name);
+    if (!pkg) throw new Error(`Package "${name}" not found`);
+
+    const flatten = alias === "globalThis";
+    if (flatten && typeof pkg === "object" && pkg !== null) {
+      const keys = Object.keys(pkg);
+      keys.forEach(k => {
+        if (k === "globalThis") throw new Error('Cannot export a property called "globalThis"');
+        globalThis[k] = pkg[k];
+      });
+      this.flattenMap[name] = keys;
+      return keys;
+    } else {
+      globalThis[alias || name] = pkg;
+      return pkg;
+    }
+  }
+
+  globalDelete(name) {
+    if (name === "globalThis") throw new Error('Cannot delete globalThis itself');
+
+    const flatKeys = this.flattenMap[name];
+    if (flatKeys) {
+      for (let k of flatKeys) delete globalThis[k];
+      delete this.flattenMap[name];
+      return;
+    }
+
+    delete globalThis[name];
+  }
 }
 
 globalThis.PM = (() => {
@@ -257,24 +296,14 @@ globalThis.PM = (() => {
     add: (n, d) => mod.add(n, d),
     run: (n) => mod.run(n),
     delete: (n) => mod.delete(n),
-    override: (n) => mod.getOverride(n)
+    override: (n) => mod.getOverride(n),
+
+    localExport: (name, value) => mod.add(name, value),
+    globalExport: (name, alias) => mod.globalExport(name, alias),
+    localDelete: (name) => mod.delete(name),
+    globalDelete: (name) => mod.globalDelete(name)
   };
 })();
-
-function exportToPM(name, value) {
-  PM.add(name, value);
-  return value;
-}
-
-function exportToGlobal(name, alias) {
-  const pkg = PM.run(name);
-  if (!pkg) throw new Error(`Package "${name}" not found`);
-  globalThis[alias || name] = pkg;
-  return pkg;
-}
-
-function deleteFromPM(name) { PM.delete(name); }
-function deleteFromGlobal(name) { globalThis[name] = undefined; }
 
 function tick() {
   try { TS.tick(); }
