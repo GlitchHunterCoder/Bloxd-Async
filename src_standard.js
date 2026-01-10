@@ -8,8 +8,8 @@ const ErrMsg = (e) => {
   );
 };
 
-const Try=(fn,...params)=>{
-  try { fn(...params) }
+const Try = (fn, ctx = null, ...params) => {
+  try { fn.apply(ctx, params) }
   catch (e) { ErrMsg(e); }
 }
 
@@ -96,35 +96,60 @@ class TaskScheduler {
   tick() {
     const prios = this.priorities;
     const run = this.run;
-
+  
     run.iters = 0;
     if (!prios.length) return;
-
+  
     let sameTick = true;
-
+  
     while (sameTick) {
       let task = this.currentTask;
       let bucket, list, idx;
       const ctl = run.next;
       run.next = 0;
+  
       if ((ctl & 1) && task) {
         bucket = this.tasksByPriority[task.priority];
-        if (!bucket) {
+        if (!bucket || !bucket.list.length) {
           this.currentTask = null;
           return;
         }
         list = bucket.list;
         idx = task.index;
+        task = list[idx];
+        if (!task) {
+          this.currentTask = null;
+          return;
+        }
       } else {
         bucket = this.tasksByPriority[prios[0]];
         list = bucket.list;
         idx = bucket.inx;
         task = list[idx];
+        if (!task) {
+          bucket.inx = 0;
+          task = list[0];
+          if (!task) {
+            prios.shift();
+            continue;
+          }
+        }
       }
-      const res = task.gen.next();
+  
+      let res;
+      try {
+        res = task.gen.next();
+      } catch (e) {
+        this._removeTask(task);
+        this.currentTask = null;
+        ErrMsg(e);
+        continue;
+      }
+  
       const done = res.done === true;
       const req = run.req;
       run.req = 0;
+  
       if (done) {
         this._removeTask(task);
         this.currentTask = null;
@@ -135,6 +160,7 @@ class TaskScheduler {
         const next = idx + 1;
         bucket.inx = next < list.length ? next : 0;
       }
+  
       run.next = req;
       sameTick = (req & 2) && !done;
       run.iters++;
@@ -194,7 +220,7 @@ class PackageManager {
   constructor() {
     this.packs = Object.create(null);
     this.overrideIndex = Object.create(null);
-    this.flattenMap = Object.create(null); // track keys flattened to globalThis
+    this.flattenMap = Object.create(null);
     this.init();
   }
 
@@ -220,7 +246,6 @@ class PackageManager {
       }
     }
 
-    // remove any flattened globals
     const flatKeys = this.flattenMap[name];
     if (flatKeys) {
       for (let k of flatKeys) delete globalThis[k];
@@ -296,27 +321,6 @@ class PackageManager {
   }
 }
 
-globalThis.PM = (() => {
-  const mod = new PackageManager();
-  return {
-    mod,
-    add: (n, d) => mod.add(n, d),
-    run: (n) => mod.run(n),
-    delete: (n) => mod.delete(n),
-    override: (n) => mod.getOverride(n),
-
-    // new exports
-    localExport: (name, value) => {
-      mod.add(name, value);
-      return value;
-    },
-    globalExport: (name, alias) => mod.globalExport(name, alias),
-
-    localDelete: (name) => mod.delete(name),
-    globalDelete: (name) => mod.globalDelete(name)
-  };
-})();
-
 function tick() {
-  Try(TS.tick)
+  Try(TS.tick, TS)
 }
