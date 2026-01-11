@@ -85,10 +85,10 @@ class TaskScheduler {
   }
   // one-shot controls (apply once)
   // temporary (one-shot)
-  norm(perm=false){ this.run.ctrl[+!perm] = 0; }
-  keep(perm=false){ this.run.ctrl[+!perm] = 1; }
-  jump(perm=false){ this.run.ctrl[+!perm] = 2; }
-  cont(perm=false){ this.run.ctrl[+!perm] = 3; }
+  norm(perm){ this.run.ctrl[+!perm] = 0; }
+  keep(perm){ this.run.ctrl[+!perm] = 1; }
+  jump(perm){ this.run.ctrl[+!perm] = 2; }
+  cont(perm){ this.run.ctrl[+!perm] = 3; }
 
   // unified helper
   ctrl(sameTask, sameTick, permanent = false) {
@@ -222,11 +222,11 @@ globalThis.TS = new class {
 
   del(id) { this.gen.delById(id); }
 
-  norm() { this.gen.norm() }
-  keep()   { this.gen.keep(); }
-  cont()   { this.gen.cont(); }
-  jump() { this.gen.jump(); }
-  ctrl(sameTask, sameTick) { this.gen.ctrl(sameTask, sameTick); }
+  norm(perm=false){ this.gen.norm(perm) }
+  keep(perm=false){ this.gen.keep(perm); }
+  cont(perm=false){ this.gen.cont(perm); }
+  jump(perm=false){ this.gen.jump(perm); }
+  ctrl(sameTask, sameTick, permanent = false) { this.gen.ctrl(sameTask, sameTick, permanent); }
   iters()  { return this.gen.iters(); }
 
   id() {
