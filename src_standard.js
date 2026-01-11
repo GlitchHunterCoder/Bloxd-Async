@@ -1,5 +1,5 @@
 globalThis.GeneratorFunction = function* () {}.constructor;
-globalThis.Generator = function* () {}().constructor;
+globalThis.Generator = function* () {}().constructor; //h
 
 const ErrMsg = (e) => {
   api.broadcastMessage(
@@ -22,7 +22,7 @@ class TaskScheduler {
     this.currentTask = null;
     this.nextId = 1;
     this.run = {
-      req: 0,
+      ctrl: [0, 0], // [permanent, temporary]
       next: 0,
       iters: 0
     };
@@ -83,88 +83,118 @@ class TaskScheduler {
       this.currentTask = null;
     }
   }
+  // one-shot controls (apply once)
+  // temporary (one-shot)
+  norm(perm=false){ this.run.ctrl[+!perm] = 0; }
+  keep(perm=false){ this.run.ctrl[+!perm] = 1; }
+  jump(perm=false){ this.run.ctrl[+!perm] = 2; }
+  cont(perm=false){ this.run.ctrl[+!perm] = 3; }
 
-  norm() { this.run.req = 0; }
-  keep()   { this.run.req = 1; }
-  switch() { this.run.req = 2; }
-  cont()   { this.run.req = 3; }
-  iters()  { return this.run.iters; }
-  ctrl(sameTask, sameTick) {
-    this.run.req = (sameTask ? 1 : 0) | (sameTick ? 2 : 0);
+  // unified helper
+  ctrl(sameTask, sameTick, permanent = false) {
+    const bits =  (sameTick ? 2 : 0) | (sameTask ? 1 : 0)
+    this.run.ctrl[permanent ? 0 : 1] = bits;
   }
 
+  iters()  { return this.run.iters; }
+
   tick() {
-    const prios = this.priorities;
-    const run = this.run;
+      const prios = this.priorities;
+      const run = this.run;
   
-    run.iters = 0;
-    if (!prios.length) return;
+      run.iters = 0;
+      if (!prios.length) { this.norm(true); return; }
   
-    let sameTick = true;
+      let sameTick = true;
   
-    while (sameTick) {
-      let task = this.currentTask;
-      let bucket, list, idx;
-      const ctl = run.next;
-      run.next = 0;
+      while (sameTick) {
+          let task = this.currentTask;
+          let bucket, list, idx;
   
-      if ((ctl & 1) && task) {
-        bucket = this.tasksByPriority[task.priority];
-        if (!bucket || !bucket.list.length) {
-          this.currentTask = null;
-          return;
-        }
-        list = bucket.list;
-        idx = task.index;
-        task = list[idx];
-        if (!task) {
-          this.currentTask = null;
-          return;
-        }
-      } else {
-        bucket = this.tasksByPriority[prios[0]];
-        list = bucket.list;
-        idx = bucket.inx;
-        task = list[idx];
-        if (!task) {
-          bucket.inx = 0;
-          task = list[0];
-          if (!task) {
-            prios.shift();
-            continue;
+          const ctl = run.next;
+          run.next = 0;
+  
+          // --- Decide which task to run ---
+          if ((ctl & 1) && task) {
+              // same task path
+              bucket = this.tasksByPriority[task.priority];
+              if (!bucket || !bucket.list.length) {
+                  this.currentTask = null;
+                  return;
+              }
+              list = bucket.list;
+              idx = task.index;
+  
+              task = list[idx];
+              if (!task) {
+                  this.currentTask = null;
+                  return;
+              }
+          } else {
+              // next task path or fresh iteration
+              task = null;
+              for (let pi = 0; pi < prios.length; pi++) {
+                  bucket = this.tasksByPriority[prios[pi]];
+                  list = bucket.list;
+                  if (!list.length) continue;
+  
+                  idx = bucket.inx;
+                  task = list[idx];
+  
+                  if (!task) {
+                      // reset index if stale
+                      bucket.inx = 0;
+                      task = list[0];
+                      if (!task) continue; // empty bucket, try next
+                      idx = 0;
+                  }
+  
+                  // found a valid task
+                  break;
+              }
+  
+              if (!task) {
+                  this.currentTask = null;
+                  return; // no tasks left
+              }
           }
-        }
-      }
   
-      let res;
-      try {
-        res = task.gen.next();
-      } catch (e) {
-        this._removeTask(task);
-        this.currentTask = null;
-        ErrMsg(e);
-        continue;
-      }
+          this.currentTask = task;
   
-      const done = res.done === true;
-      const req = run.req;
-      run.req = 0;
+          // --- Run the generator ---
+          let res;
+          try {
+              res = task.gen.next();
+          } catch (e) {
+              this._removeTask(task);
+              this.currentTask = null;
+              ErrMsg(e);
+              continue;
+          }
+          const done = res.done;
   
-      if (done) {
-        this._removeTask(task);
-        this.currentTask = null;
-      } else {
-        this.currentTask = task;
-      }
-      if (!done && !(req & 1)) {
-        const next = idx + 1;
-        bucket.inx = next < list.length ? next : 0;
-      }
+          // --- Merge permanent + temporary flags ---
+          const ctrl = run.ctrl;
+          const req = ctrl[1] !== 0 ? ctrl[1] : ctrl[0];
+          ctrl[1] = 0; // clear temporary
   
-      run.next = req;
-      sameTick = (req & 2) && !done;
-      run.iters++;
-    }
+          // --- Remove task if done ---
+          if (done) {
+              this._removeTask(task);
+              this.currentTask = null;
+          }
+  
+          // --- Advance bucket index ---
+          if (!done) {
+              bucket.inx = (task.index + 1) % list.length;
+              this.currentTask = null; // force next iteration to pick next task
+          }
+  
+          run.next = req;
+          // continue same-tick only if requested AND tasks remain
+          sameTick = (req & 2) && prios.length > 0;
+          run.iters++;
+      }
   }
 }
 
@@ -195,7 +225,7 @@ globalThis.TS = new class {
   norm() { this.gen.norm() }
   keep()   { this.gen.keep(); }
   cont()   { this.gen.cont(); }
-  switch() { this.gen.switch(); }
+  jump() { this.gen.jump(); }
   ctrl(sameTask, sameTick) { this.gen.ctrl(sameTask, sameTick); }
   iters()  { return this.gen.iters(); }
 
@@ -220,7 +250,7 @@ class PackageManager {
   constructor() {
     this.packs = Object.create(null);
     this.overrideIndex = Object.create(null);
-    this.flattenMap = Object.create(null);
+    this.flattenMap = Object.create(null); // track keys flattened to globalThis
     this.init();
   }
 
@@ -246,6 +276,7 @@ class PackageManager {
       }
     }
 
+    // remove any flattened globals
     const flatKeys = this.flattenMap[name];
     if (flatKeys) {
       for (let k of flatKeys) delete globalThis[k];
@@ -320,6 +351,24 @@ class PackageManager {
     delete globalThis[name];
   }
 }
+
+globalThis.PM = (() => {
+  const mod = new PackageManager();
+  return {
+    mod,
+    add: (n, d) => mod.add(n, d),
+    run: (n) => mod.run(n),
+    delete: (n) => mod.delete(n),
+    override: (n) => mod.getOverride(n),
+
+    // new exports
+    localExport: (name, value) => mod.add(name, value),
+    globalExport: (name, alias) => mod.globalExport(name, alias),
+
+    localDelete: (name) => mod.delete(name),
+    globalDelete: (name) => mod.globalDelete(name)
+  };
+})();
 
 function tick() {
   Try(TS.tick, TS)
