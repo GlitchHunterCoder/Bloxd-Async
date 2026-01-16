@@ -24,7 +24,7 @@ class TaskScheduler {
     this.flag = {
       ctrl: [0, 0], // [permanent, temporary]
       next: 0,
-      iters: 0
+      iters: [0,0] //[perTick, withinTick]
     };
   }
   init(task, ...params) {
@@ -119,102 +119,103 @@ class TaskScheduler {
   iters()  { return this.flag.iters; }
 
   tick() {
-      const prios = this.priorities;
-      const run = this.flag;
-  
-      run.iters = 0;
-      if (!prios.length) { this.norm(true); return; }
-  
-      let sameTick = true;
-  
-      while (sameTick) {
-          let task = this.currentTask;
-          let bucket, list, idx;
-  
-          const ctl = run.next;
-          run.next = 0;
-  
-          // --- Decide which task to run ---
-          if ((ctl & 1) && task) {
-              // same task path
-              bucket = this.tasksByPriority[task.priority];
-              if (!bucket || !bucket.list.length) {
-                  this.currentTask = null;
-                  return;
-              }
-              list = bucket.list;
-              idx = task.index;
-  
-              task = list[idx];
-              if (!task) {
-                  this.currentTask = null;
-                  return;
-              }
-          } else {
-              // next task path or fresh iteration
-              task = null;
-              for (let pi = 0; pi < prios.length; pi++) {
-                  bucket = this.tasksByPriority[prios[pi]];
-                  list = bucket.list;
-                  if (!list.length) continue;
-  
-                  idx = bucket.inx;
-                  task = list[idx];
-  
-                  if (!task) {
-                      // reset index if stale
-                      bucket.inx = 0;
-                      task = list[0];
-                      if (!task) continue; // empty bucket, try next
-                      idx = 0;
-                  }
-  
-                  // found a valid task
-                  break;
-              }
-  
-              if (!task) {
-                  this.currentTask = null;
-                  return; // no tasks left
-              }
-          }
-  
-          this.currentTask = task;
-  
-          // --- Run the generator ---
-          let res;
-          try {
-              res = task.gen.next();
-          } catch (e) {
-              this._removeTask(task);
-              this.currentTask = null;
-              ErrMsg(e);
-              continue;
-          }
-          const done = res.done;
-  
-          // --- Merge permanent + temporary flags ---
-          const ctrl = run.ctrl;
-          const req = ctrl[1] !== 0 ? ctrl[1] : ctrl[0];
-          ctrl[1] = 0; // clear temporary
-  
-          // --- Remove task if done ---
-          if (done) {
-              this._removeTask(task);
-              this.currentTask = null;
-          }
-  
-          // --- Advance bucket index ---
-          if (!done) {
-              bucket.inx = (task.index + 1) % list.length;
-              this.currentTask = null; // force next iteration to pick next task
-          }
-  
-          run.next = req;
-          // continue same-tick only if requested AND tasks remain
-          sameTick = (req & 2) && prios.length > 0;
-          run.iters++;
-      }
+    const prios = this.priorities;
+    const run = this.flag;
+
+    run.iters[1] = 0;
+    if (!prios.length) { this.norm(true); return; }
+
+    let sameTick = true;
+
+    while (sameTick) {
+        let task = this.currentTask;
+        let bucket, list, idx;
+
+        const ctl = run.next;
+        run.next = 0;
+
+        // --- Decide which task to run ---
+        if ((ctl & 1) && task) {
+            // same task path
+            bucket = this.tasksByPriority[task.priority];
+            if (!bucket || !bucket.list.length) {
+                this.currentTask = null;
+                return;
+            }
+            list = bucket.list;
+            idx = task.index;
+
+            task = list[idx];
+            if (!task) {
+                this.currentTask = null;
+                return;
+            }
+        } else {
+            // next task path or fresh iteration
+            task = null;
+            for (let pi = 0; pi < prios.length; pi++) {
+                bucket = this.tasksByPriority[prios[pi]];
+                list = bucket.list;
+                if (!list.length) continue;
+
+                idx = bucket.inx;
+                task = list[idx];
+
+                if (!task) {
+                    // reset index if stale
+                    bucket.inx = 0;
+                    task = list[0];
+                    if (!task) continue; // empty bucket, try next
+                    idx = 0;
+                }
+
+                // found a valid task
+                break;
+            }
+
+            if (!task) {
+                this.currentTask = null;
+                return; // no tasks left
+            }
+        }
+
+        this.currentTask = task;
+
+        // --- Run the generator ---
+        let res;
+        try {
+            res = task.gen.next();
+        } catch (e) {
+            this._removeTask(task);
+            this.currentTask = null;
+            ErrMsg(e);
+            continue;
+        }
+        const done = res.done;
+
+        // --- Merge permanent + temporary flags ---
+        const ctrl = run.ctrl;
+        const req = ctrl[1] !== 0 ? ctrl[1] : ctrl[0];
+        ctrl[1] = 0; // clear temporary
+
+        // --- Remove task if done ---
+        if (done) {
+            this._removeTask(task);
+            this.currentTask = null;
+        }
+
+        // --- Advance bucket index ---
+        if (!done) {
+            bucket.inx = (task.index + 1) % list.length;
+            this.currentTask = null; // force next iteration to pick next task
+        }
+
+        run.next = req;
+        // continue same-tick only if requested AND tasks remain
+        sameTick = (req & 2) && prios.length > 0;
+        run.iters[1]++;
+    }
+    run.iters[0]++;
   }
 }
 
