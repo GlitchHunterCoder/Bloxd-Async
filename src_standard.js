@@ -227,7 +227,7 @@ globalThis.TS = new class {
   add(task, priority = 0, ...params) {
     return this.gen.add(this.init(task, ...params), priority);
   }
-  *run(fn, ...params){ yield* this.gen.exe(fn, ...params) }
+  *run(fn, ...params){ yield* this.gen.run(fn, ...params) }
   del(id) { this.gen.delById(id); }
 
   norm(perm=false){ this.gen.norm(perm) }
