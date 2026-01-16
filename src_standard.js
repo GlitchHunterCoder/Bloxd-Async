@@ -1,5 +1,5 @@
 globalThis.GeneratorFunction = function* () {}.constructor;
-globalThis.Generator = function* () {}().constructor; //h
+globalThis.Generator = function* () {}().constructor;
 
 const ErrMsg = (e) => {
   api.broadcastMessage(
@@ -18,13 +18,12 @@ class TaskScheduler {
     this.tasksByPriority = {}
     this.priorities = [];
     this.tasksById = {}
-
     this.currentTask = null;
     this.nextId = 1;
     this.flag = {
       ctrl: [0, 0], // [permanent, temporary]
       next: 0,
-      iters: [0, 0] //[TicksRan, withinTickRuns]
+      iters: [0, 0] // [TicksRan, withinTickRuns]
     };
   }
   init(task, ...params) {
@@ -50,7 +49,6 @@ class TaskScheduler {
   }
   add(gen, priority = 0) {
     let bucket = this.tasksByPriority[priority];
-
     if (!bucket) {
       bucket = { list: [], inx: 0 };
       this.tasksByPriority[priority] = bucket;
@@ -59,17 +57,14 @@ class TaskScheduler {
       while (i < pr.length && pr[i] > priority) i++;
       pr.splice(i, 0, priority);
     }
-
     const task = {
       id: this.nextId++,
       gen,
       priority,
       index: bucket.list.length
     };
-
     bucket.list.push(task);
     this.tasksById[task.id] = task;
-
     return task.id;
   }
 
@@ -81,36 +76,27 @@ class TaskScheduler {
   _removeTask(task) {
     const bucket = this.tasksByPriority[task.priority];
     if (!bucket) return;
-
     const list = bucket.list;
     const last = list.pop();
-
     if (last !== task) {
       list[task.index] = last;
       last.index = task.index;
     }
-
     delete this.tasksById[task.id];
-
     if (!list.length) {
       delete this.tasksByPriority[task.priority];
       const p = this.priorities;
       const i = p.indexOf(task.priority);
       if (i !== -1) p.splice(i, 1);
     }
-
     if (this.currentTask === task) {
       this.currentTask = null;
     }
   }
-  // one-shot controls (apply once)
-  // temporary (one-shot)
   norm(perm){ this.flag.ctrl[+!perm] = 0; }
   keep(perm){ this.flag.ctrl[+!perm] = 1; }
   jump(perm){ this.flag.ctrl[+!perm] = 2; }
   cont(perm){ this.flag.ctrl[+!perm] = 3; }
-
-  // unified helper
   ctrl(sameTask, sameTick, permanent = false) {
     const bits =  (sameTick ? 2 : 0) | (sameTask ? 1 : 0)
     this.flag.ctrl[permanent ? 0 : 1] = bits;
@@ -121,22 +107,15 @@ class TaskScheduler {
   tick() {
     const prios = this.priorities;
     const run = this.flag;
-
     run.iters[1] = 0;
     if (!prios.length) { this.norm(true); return; }
-
     let sameTick = true;
-
     while (sameTick) {
         let task = this.currentTask;
         let bucket, list, idx;
-
         const ctl = run.next;
         run.next = 0;
-
-        // --- Decide which task to run ---
         if ((ctl & 1) && task) {
-            // same task path
             bucket = this.tasksByPriority[task.priority];
             if (!bucket || !bucket.list.length) {
                 this.currentTask = null;
@@ -144,44 +123,33 @@ class TaskScheduler {
             }
             list = bucket.list;
             idx = task.index;
-
             task = list[idx];
             if (!task) {
                 this.currentTask = null;
                 return;
             }
         } else {
-            // next task path or fresh iteration
             task = null;
             for (let pi = 0; pi < prios.length; pi++) {
                 bucket = this.tasksByPriority[prios[pi]];
                 list = bucket.list;
                 if (!list.length) continue;
-
                 idx = bucket.inx;
                 task = list[idx];
-
                 if (!task) {
-                    // reset index if stale
                     bucket.inx = 0;
                     task = list[0];
-                    if (!task) continue; // empty bucket, try next
+                    if (!task) continue;
                     idx = 0;
                 }
-
-                // found a valid task
                 break;
             }
-
             if (!task) {
                 this.currentTask = null;
-                return; // no tasks left
+                return;
             }
         }
-
         this.currentTask = task;
-
-        // --- Run the generator ---
         let res;
         try {
             res = task.gen.next();
@@ -192,26 +160,18 @@ class TaskScheduler {
             continue;
         }
         const done = res.done;
-
-        // --- Merge permanent + temporary flags ---
         const ctrl = run.ctrl;
         const req = ctrl[1] !== 0 ? ctrl[1] : ctrl[0];
-        ctrl[1] = 0; // clear temporary
-
-        // --- Remove task if done ---
+        ctrl[1] = 0;
         if (done) {
             this._removeTask(task);
             this.currentTask = null;
         }
-
-        // --- Advance bucket index ---
         if (!done) {
             bucket.inx = (task.index + 1) % list.length;
-            this.currentTask = null; // force next iteration to pick next task
+            this.currentTask = null;
         }
-
         run.next = req;
-        // continue same-tick only if requested AND tasks remain
         sameTick = (req & 2) && prios.length > 0;
         run.iters[1]++;
     }
@@ -227,12 +187,11 @@ globalThis.TS = new class {
   init(task, ...params) {
     return this.gen.init(task, ...params)
   }
-
   add(task, priority = 0, ...params) {
     return this.gen.add(this.init(task, ...params), priority);
   }
-  *run(fn, ...params){ yield* this.gen.run(fn, ...params) }
   del(id) { this.gen.delById(id); }
+  *run(fn, ...params){ yield* this.gen.run(fn, ...params) }
 
   norm(perm=false){ this.gen.norm(perm) }
   keep(perm=false){ this.gen.keep(perm); }
@@ -262,7 +221,7 @@ class PackageManager {
   constructor() {
     this.packs = Object.create(null);
     this.overrideIndex = Object.create(null);
-    this.flattenMap = Object.create(null); // track keys flattened to globalThis
+    this.flattenMap = Object.create(null);
     this.init();
   }
 
@@ -280,21 +239,17 @@ class PackageManager {
   delete(name) {
     const pack = this.packs[name];
     if (!pack) return;
-
     const keys = pack._ovKeys;
     if (keys) {
       for (let i = 0; i < keys.length; i++) {
         delete this.overrideIndex[keys[i]];
       }
     }
-
-    // remove any flattened globals
     const flatKeys = this.flattenMap[name];
     if (flatKeys) {
       for (let k of flatKeys) delete globalThis[k];
       delete this.flattenMap[name];
     }
-
     delete this.packs[name];
   }
 
@@ -309,14 +264,11 @@ class PackageManager {
   wrap(target, prefix) {
     const keys = Object.getOwnPropertyNames(target);
     const idx = this.overrideIndex;
-
     for (let i = 0; i < keys.length; i++) {
       const k = keys[i];
       const orig = target[k];
       if (typeof orig !== "function") continue;
-
       const name = prefix + "." + k;
-
       target[k] = function (...args) {
         const fn = idx[name];
         return fn ? fn(orig.bind(this), ...args)
@@ -330,11 +282,9 @@ class PackageManager {
     this.wrap(TaskScheduler.prototype, "TaskScheduler");
   }
 
-  // new methods to handle global flattening
   globalExport(name, alias) {
     const pkg = this.run(name);
     if (!pkg) throw new Error(`Package "${name}" not found`);
-
     const flatten = alias === "globalThis";
     if (flatten && typeof pkg === "object" && pkg !== null) {
       const keys = Object.keys(pkg);
@@ -352,14 +302,12 @@ class PackageManager {
 
   globalDelete(name) {
     if (name === "globalThis") throw new Error('Cannot delete globalThis itself');
-
     const flatKeys = this.flattenMap[name];
     if (flatKeys) {
       for (let k of flatKeys) delete globalThis[k];
       delete this.flattenMap[name];
       return;
     }
-
     delete globalThis[name];
   }
 }
@@ -372,11 +320,8 @@ globalThis.PM = (() => {
     run: (n) => mod.run(n),
     delete: (n) => mod.delete(n),
     override: (n) => mod.getOverride(n),
-
-    // new exports
     localExport: (name, value) => mod.add(name, value),
     globalExport: (name, alias) => mod.globalExport(name, alias),
-
     localDelete: (name) => mod.delete(name),
     globalDelete: (name) => mod.globalDelete(name)
   };
