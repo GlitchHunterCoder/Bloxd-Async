@@ -21,13 +21,13 @@ class TaskScheduler {
 
     this.currentTask = null;
     this.nextId = 1;
-    this.run = {
+    this.flag = {
       ctrl: [0, 0], // [permanent, temporary]
       next: 0,
       iters: 0
     };
   }
-  *exe(fn, ...params) {
+  *run(fn, ...params) {
     const gen = this.init(fn, ...params)
     let result = gen.next()
     while (!result.done) {
@@ -93,22 +93,22 @@ class TaskScheduler {
   }
   // one-shot controls (apply once)
   // temporary (one-shot)
-  norm(perm){ this.run.ctrl[+!perm] = 0; }
-  keep(perm){ this.run.ctrl[+!perm] = 1; }
-  jump(perm){ this.run.ctrl[+!perm] = 2; }
-  cont(perm){ this.run.ctrl[+!perm] = 3; }
+  norm(perm){ this.flag.ctrl[+!perm] = 0; }
+  keep(perm){ this.flag.ctrl[+!perm] = 1; }
+  jump(perm){ this.flag.ctrl[+!perm] = 2; }
+  cont(perm){ this.flag.ctrl[+!perm] = 3; }
 
   // unified helper
   ctrl(sameTask, sameTick, permanent = false) {
     const bits =  (sameTick ? 2 : 0) | (sameTask ? 1 : 0)
-    this.run.ctrl[permanent ? 0 : 1] = bits;
+    this.flag.ctrl[permanent ? 0 : 1] = bits;
   }
 
-  iters()  { return this.run.iters; }
+  iters()  { return this.flag.iters; }
 
   tick() {
       const prios = this.priorities;
-      const run = this.run;
+      const run = this.flag;
   
       run.iters = 0;
       if (!prios.length) { this.norm(true); return; }
@@ -227,7 +227,7 @@ globalThis.TS = new class {
   add(task, priority = 0, ...params) {
     return this.gen.add(this.init(task, ...params), priority);
   }
-  *exe(fn, ...params){ yield* this.gen.exe(fn, ...params) }
+  *run(fn, ...params){ yield* this.gen.exe(fn, ...params) }
   del(id) { this.gen.delById(id); }
 
   norm(perm=false){ this.gen.norm(perm) }
