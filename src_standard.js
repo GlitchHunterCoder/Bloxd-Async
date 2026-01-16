@@ -27,6 +27,18 @@ class TaskScheduler {
       iters: 0
     };
   }
+  init(task, ...params) {
+    if (task && typeof task.next === "function") return task;
+    if (typeof task === "function") {
+      try {
+        if (task.constructor === globalThis.GeneratorFunction) {
+          return task(...params);
+        }
+      } catch (e) {}
+      return (function* () { return task(...params); })();
+    }
+    return (function* () { return task; })();
+  }
   *run(fn, ...params) {
     const gen = this.init(fn, ...params)
     let result = gen.next()
@@ -212,16 +224,7 @@ globalThis.TS = new class {
     this.delete = (id) => this.del(id);
   }
   init(task, ...params) {
-    if (task && typeof task.next === "function") return task;
-    if (typeof task === "function") {
-      try {
-        if (task.constructor === globalThis.GeneratorFunction) {
-          return task(...params);
-        }
-      } catch (e) {}
-      return (function* () { return task(...params); })();
-    }
-    return (function* () { return task; })();
+    return this.gen.init(task, ...params)
   }
 
   add(task, priority = 0, ...params) {
