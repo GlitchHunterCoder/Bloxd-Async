@@ -16,16 +16,11 @@ PM.add("AsyncTiming", {
   },
 
   setInterval(fn, delay, ...params) {
+    const sleep = this.sleep
     const gen = (function* () {
       while (true) {
-        const start = Date.now()
-        while (Date.now() - start < delay) yield
-        const inner = TS.init(fn, ...params)
-        let r = inner.next()
-        while (!r.done) {
-          yield
-          r = inner.next()
-        }
+        yield* sleep(delay)
+        yield* TS.exe(fn, ...params)
       }
     })()
     return TS.add(gen)
