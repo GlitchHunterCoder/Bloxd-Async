@@ -10,7 +10,7 @@ PM.add("AsyncTiming", {
     const sleep = this.sleep
     const gen = (function* () {
       yield* sleep(delay)
-      yield* TS.run(fn, ...params)
+      yield* TS.exe(fn, ...params)
     })()
     return TS.add(gen)
   },
