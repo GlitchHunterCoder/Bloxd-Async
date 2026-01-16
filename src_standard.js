@@ -24,7 +24,7 @@ class TaskScheduler {
     this.flag = {
       ctrl: [0, 0], // [permanent, temporary]
       next: 0,
-      iters: [0,0] //[perTick, withinTick]
+      iters: [0, 0] //[TicksRan, withinTickRuns]
     };
   }
   init(task, ...params) {
