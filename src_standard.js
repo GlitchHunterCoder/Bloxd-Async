@@ -27,7 +27,15 @@ class TaskScheduler {
       iters: 0
     };
   }
-
+  *exe(fn, ...params) {
+    const gen = this.init(fn, ...params)
+    let result = gen.next()
+    while (!result.done) {
+      yield;
+      result = gen.next()
+    }
+    return result.value
+  }
   add(gen, priority = 0) {
     let bucket = this.tasksByPriority[priority];
 
@@ -219,7 +227,7 @@ globalThis.TS = new class {
   add(task, priority = 0, ...params) {
     return this.gen.add(this.init(task, ...params), priority);
   }
-
+  *exe(fn, ...params){ yield* this.gen.exe(fn, ...params) }
   del(id) { this.gen.delById(id); }
 
   norm(perm=false){ this.gen.norm(perm) }
