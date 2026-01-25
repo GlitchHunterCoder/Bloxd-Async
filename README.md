@@ -1,4 +1,4 @@
-> [!WARN]
+> [!WARNING]
 > do not use str_IU_optimised.js, since that is not a stable release
 
 # Introduction
