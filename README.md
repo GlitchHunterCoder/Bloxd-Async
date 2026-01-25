@@ -1,3 +1,6 @@
+> [!WARN]
+> do not use str_IU_optimised.js, since that is not a stable release
+
 # Introduction
 ## Why it was made
 this project exists becuase i saw how under userused and overlooked generator functions were
