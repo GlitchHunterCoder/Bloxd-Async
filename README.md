@@ -75,6 +75,8 @@ console.log(gen.next()) //{value:"after",done:true}
    - Custom `Promise`: sets code which will either resolve or reject at a future point in time
    - `Channel`: allows code to communicate with each other across task instances
    - `ThreadManager`: allows code to be ran in a seperate task before being handed back to the main task
+ - Bloxd_env.js
+   - used to simulate bloxd tick enviroment outside bloxd for testing
 
 ---
 
