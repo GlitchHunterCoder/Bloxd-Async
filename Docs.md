@@ -8,28 +8,55 @@ this will outline how to use this tool and what each part of the tool does
 ## GeneratorFunction / Generator
 these allow access to the hidden global objects, `GeneratorFunction` and `Generator`
 ## ErrMsg
-this is a helper function to display better errors, by displaying the errors
-- name
-- message
-- and stack
-
-This is used in `Try`
+```js
+/**
+ * Broadcasts better errors
+ * @param {Err} Function to run
+ * @returns {void}
+ */
+ErrMsg(Err)
+```
 ## Try
 ```js
 /**
  * Runs code, and on throw, displays better errors
- * @param {Func} Function to run
+ * @param {Func(){}} Function to run
  * @param {...Params} Parameters to give to functions
  * @returns {void}
  */
 Try(Func, ...Params)
 ```
-takes in 1 function and any number of params
-a shorthand for a try catch using ErrMsg, is used to easily see errors
 ## TS
 ### Init
-`init(task, ...params) { ... }`
-this takes in
+```js
+/**
+ * Converts Task to generators
+ * @param {Task} task to run
+ * @param {...Params} Parameters to give to task
+ * @returns {void}
+ */
+init(Task, ...Params)
+```
+### \*Run
+```js
+/**
+ * Runs one step of generator
+ * @param {Fn(){}} function to run
+ * @param {...Params} Parameters to give to task
+ * @returns {void}
+ */
+*run(fn, ...params)
+```
+### Add
+```js
+/**
+ * Runs one step of generator
+ * @param {Fn(){}} Generator to Add
+ * @param {Priority} Priority of task, if unset, defaults to 0, higher priority means it will run before other tasks of a lower priority
+ * @returns {void}
+ */
+add(Fn, Priority)
+```
 ## PM
 ## tick
 ---
