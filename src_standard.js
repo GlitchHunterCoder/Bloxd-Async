@@ -282,7 +282,7 @@ class PackageManager {
     this.wrap(TaskScheduler.prototype, "TaskScheduler");
   }
 
-  globalExport(name, alias) {
+  globalAdd(name, alias) {
     const pkg = this.run(name);
     if (!pkg) throw new Error(`Package "${name}" not found`);
     const flatten = alias === "globalThis";
@@ -320,8 +320,8 @@ globalThis.PM = (() => {
     run: (n) => mod.run(n),
     delete: (n) => mod.delete(n),
     override: (n) => mod.getOverride(n),
-    localExport: (name, value) => mod.add(name, value),
-    globalExport: (name, alias) => mod.globalExport(name, alias),
+    localAdd: (name, value) => mod.add(name, value),
+    globalAdd: (name, alias) => mod.globalAdd(name, alias),
     localDelete: (name) => mod.delete(name),
     globalDelete: (name) => mod.globalDelete(name)
   };
