@@ -348,8 +348,7 @@ function debounce(fn, ms) {
 
 ## Use Cases
 
-This Can Be Used to Make code Run whenever you like, and give coders alot more control over how and when code runs
----
+### This Can Be Used to Make code Run whenever you like, and give coders alot more control over how and when code runs
 
 ## Full Example: Everything Together
 
