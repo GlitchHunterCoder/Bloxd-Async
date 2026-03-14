@@ -1,4 +1,6 @@
 # Introduction
+> [!NOTE]
+> For a guide on Async API we have [`LINK HERE`](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/main/Docs.md)
 ## Why it was made
 this project exists becuase i saw how under userused and overlooked generator functions were
 and i saw that i could bring async back into bloxd by using them in tandem with a task scheduler
