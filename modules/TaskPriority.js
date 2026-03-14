@@ -1,33 +1,12 @@
-PM.add("TaskPriority", {
-  queueMicrotask(fn, ...params) {
-    const gen = (function* () {
-      yield* TS.run(fn, ...params)
-    })()
-    return TS.add(gen, 1)
-  },
+//require PrioritySystem.js
 
-  nextTick(fn, ...params) {
-    const gen = (function* () {
-      yield* TS.run(fn, ...params)
-    })()
-    return TS.add(gen, 2)
-  },
-
-  override(fn, ...params) {
-    const gen = (function* () {
-      yield* TS.run(fn, ...params)
-    })()
-    return TS.add(gen, Infinity)
-  },
-
-  idle(fn, ...params) {
-    const gen = (function* () {
-      yield* TS.run(fn, ...params)
-    })()
-    return TS.add(gen, -Infinity)
-  },
-
-  await(fn, ...params) {
-    return TS.run(fn, ...params)
+PM.localAdd("TaskPriority", (() => {
+  const priorityHelper = (p) => (fn, ...params) => TS.add(TS.run(fn, ...params), p)
+  return {
+    queueMicrotask: priorityHelper(1),
+    nextTick:       priorityHelper(2),
+    override:       priorityHelper(Infinity),
+    idle:           priorityHelper(-Infinity),
+    await(fn, ...params) { return TS.run(fn, ...params) }
   }
-})
+})())
