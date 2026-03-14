@@ -140,14 +140,15 @@ globalThis.PM = (() => {
   let mod = new PackageManager()
   return {
     mod,
-    add:          (n, d, a) => (mod.localAdd(n, d), mod.globalAdd(n, a)),
-    run:          (n)       => mod.run(n),
-    delete:       (n)       => (mod.globalDelete(n), mod.localDelete(n)),
-    override:     (n)       => mod.getOverride(n),
-    localAdd:     (n, d)    => mod.localAdd(n, d),
-    globalAdd:    (n, a)    => mod.globalAdd(n, a),
-    localDelete:  (n)       => mod.localDelete(n),
-    globalDelete: (n)       => mod.globalDelete(n)
+    add: (n, d, a) => (mod.localAdd(n, d), mod.globalAdd(n, a)),
+    run: (n) => mod.run(n),
+    delete: (n) => (mod.globalDelete(n), mod.localDelete(n)),
+    override: (n) => mod.getOverride(n),
+    localAdd: (n, d) => mod.localAdd(n, d),
+    globalAdd: (n, a) => mod.globalAdd(n, a),
+    localDelete: (n) => mod.localDelete(n),
+    globalDelete: (n) => mod.globalDelete(n)
   }
 })()
+
 function tick() { Try(TS.tick, TS) }
