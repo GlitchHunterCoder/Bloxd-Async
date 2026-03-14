@@ -1,4 +1,4 @@
-# Bloxd-Async Documentation
+# Documentation
 
 ---
 
