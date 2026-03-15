@@ -81,24 +81,32 @@ let PackageManager = class {
     this.flattenMap    = Object.create(null)
     this.init()
   }
+
   localAdd(name, data) {
     this.packs[name] = data
-    if (data?.override) {
-      let keys = Object.keys(data.override)
-      data._ovKeys = keys
-      keys.forEach(k => { this.overrideIndex[k] = data.override[k] })
-    }
   }
+
   localDelete(name) {
-    let pack = this.packs[name]
-    if (!pack) return
-    pack._ovKeys?.forEach(k => delete this.overrideIndex[k])
-    this.flattenMap[name]?.forEach(k => delete globalThis[k])
-    delete this.flattenMap[name]
+    if (!this.packs[name]) return
     delete this.packs[name]
   }
+
+  _activateOverrides(name) {
+    let data = this.packs[name]
+    if (!data?.override) return
+    let keys = Object.keys(data.override)
+    data._ovKeys = keys
+    keys.forEach(k => { this.overrideIndex[k] = data.override[k] })
+  }
+
+  _deactivateOverrides(name) {
+    let data = this.packs[name]
+    data?._ovKeys?.forEach(k => delete this.overrideIndex[k])
+  }
+
   run(name)         { return this.packs[name] }
   getOverride(name) { return this.overrideIndex[name] }
+
   wrap(target, prefix) {
     for (let k of Object.getOwnPropertyNames(target)) {
       let orig = target[k]
@@ -110,10 +118,12 @@ let PackageManager = class {
       }
     }
   }
+
   init() {
     this.wrap(TS, "TS")
     this.wrap(TaskScheduler.prototype, "TaskScheduler")
   }
+
   globalAdd(name, alias) {
     let pkg = this.run(name)
     if (!pkg) throw new Error(`Package "${name}" not found`)
@@ -122,13 +132,16 @@ let PackageManager = class {
       if (keys.includes("globalThis")) throw new Error('Cannot export a key named "globalThis"')
       keys.forEach(k => { globalThis[k] = pkg[k] })
       this.flattenMap[name] = keys
-      return keys
+    } else {
+      globalThis[alias ?? name] = pkg
     }
-    globalThis[alias ?? name] = pkg
+    this._activateOverrides(name)
     return pkg
   }
+
   globalDelete(name) {
     if (name === "globalThis") throw new Error("Cannot delete globalThis itself")
+    this._deactivateOverrides(name)
     this.flattenMap[name]?.forEach(k => delete globalThis[k])
     delete this.flattenMap[name]
     delete globalThis[name]
