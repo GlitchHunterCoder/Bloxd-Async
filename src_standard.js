@@ -1,7 +1,6 @@
 globalThis.GeneratorFunction = function*(){}.constructor
 globalThis.Generator = function*(){}().constructor
-let ErrMsg = (e) =>
-  api.broadcastMessage(`${e.name}: ${e.message}\n${e.stack}`, { color: "red" })
+let ErrMsg = (e) => api.broadcastMessage(`${e.name}: ${e.message}\n${e.stack}`, { color: "red" })
 let Try = (fn, ctx = null, ...args) => {
   try { fn.apply(ctx, args) }
   catch (e) { ErrMsg(e) }
