@@ -24,7 +24,7 @@ let TaskScheduler = class {
   *run(fn, ...params) {
     let gen = this.init(fn, ...params)
     let result = gen.next()
-    while (!result.done) { yield result = gen.next() }
+    while (!result.done) { yield; result = gen.next() }
     return result.value
   }
   add(gen) {
@@ -50,7 +50,7 @@ let TaskScheduler = class {
     if (this.cursor >= this.tasks.length) this.cursor = 0
     let task = this.tasks[this.cursor]
     this.currentTask = task
-    let res
+    let res;
     try { res = task.gen.next() }
     catch (e) { this._removeTask(task); ErrMsg(e); return }
     if (res.done) this._removeTask(task)
@@ -88,13 +88,13 @@ let PackageManager = class {
   }
 
   localDelete(name) {
-    if (!this.packs[name]) return
+    if (!this.packs[name]) return;
     delete this.packs[name]
   }
 
   _activateOverrides(name) {
     let data = this.packs[name]
-    if (!data?.override) return
+    if (!data?.override) return;
     let keys = Object.keys(data.override)
     data._ovKeys = keys
     keys.forEach(k => { this.overrideIndex[k] = data.override[k] })
