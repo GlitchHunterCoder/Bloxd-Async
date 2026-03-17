@@ -63,6 +63,7 @@ let TaskScheduler = class {
 globalThis.TS = (()=>{
   let gen = new TaskScheduler()
   return {
+    gen,
     init(task, ...params) { return gen.init(task, ...params) },
     add(task, ...params) { return gen.add(this.init(task, ...params)) },
     del(id) { gen.delById(id) },
@@ -107,21 +108,22 @@ let PackageManager = class {
   run(name)         { return this.packs[name] }
   getOverride(name) { return this.overrideIndex[name] }
 
-  wrap(target, prefix) {
+  wrap(target, prefix, getInstance) {
     for (let k of Object.getOwnPropertyNames(target)) {
       let orig = target[k]
       if (typeof orig !== "function") continue
       let path = `${prefix}.${k}`
       target[k] = (...args) => {
         let fn = this.overrideIndex[path]
-        return fn ? fn(orig.bind(target), ...args) : orig.apply(target, args)
+        let ctx = getInstance ? getInstance() : target
+        return fn ? fn(orig.bind(ctx), ...args) : orig.apply(ctx, args)
       }
     }
   }
 
   init() {
     this.wrap(TS, "TS")
-    this.wrap(TaskScheduler.prototype, "TaskScheduler")
+    this.wrap(TaskScheduler.prototype, "TaskScheduler", () => TS.gen)
   }
 
   globalAdd(name, alias) {
