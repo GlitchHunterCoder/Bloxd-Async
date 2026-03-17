@@ -67,7 +67,7 @@ globalThis.TS = (()=>{
     init(task, ...params) { return gen.init(task, ...params) },
     add(task, ...params) { return gen.add(this.init(task, ...params)) },
     del(id) { gen.delById(id) },
-    *run(fn, ...params) { yield* gen.run(fn, ...params) },
+    *run(fn, ...params) { return yield* gen.run(fn, ...params) },
     iters() { return gen.iters() },
     id() { return gen.currentTask?.id ?? null },
     stats() {return { count: gen.tasks.length, current: this.id(), nextId: gen.nextId }},
