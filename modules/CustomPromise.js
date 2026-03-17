@@ -63,13 +63,10 @@ PM.localAdd("CustomPromise", (() => {
         e => { onFinally?.(); throw e }
       )
     }
-  }
 
-  const Promise = {
-    create(executor)   { return new PromiseImpl(executor) },
-    resolve(v)         { return new PromiseImpl(r => r(v)) },
-    reject(e)          { return new PromiseImpl((_, r) => r(e)) },
-    all(...promises) {
+    static resolve(v)         { return new PromiseImpl(r => r(v)) }
+    static reject(e)          { return new PromiseImpl((_, r) => r(e)) }
+    static all(...promises) {
       return new PromiseImpl((resolve, reject) => {
         const results = []
         let remaining = promises.length
@@ -78,20 +75,13 @@ PM.localAdd("CustomPromise", (() => {
           p.then(v => { results[i] = v; if (--remaining === 0) resolve(results) }, reject)
         })
       })
-    },
-    race(...promises) {
+    }
+    static race(...promises) {
       return new PromiseImpl((resolve, reject) => {
         promises.forEach(p => p.then(resolve, reject))
       })
     }
   }
 
-  // Make `new Promise(executor)` work by making it callable as a constructor
-  // by returning a function that acts like a class
-  const PromiseConstructor = function(executor) {
-    return new PromiseImpl(executor)
-  }
-  Object.assign(PromiseConstructor, Promise)
-
-  return { Promise: PromiseConstructor }
+  return { Promise: PromiseImpl }
 })())
