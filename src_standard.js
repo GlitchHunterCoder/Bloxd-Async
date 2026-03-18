@@ -134,6 +134,10 @@ let PackageManager = class {
       if (keys.includes("globalThis")) throw new Error('Cannot export a key named "globalThis"')
       keys.forEach(k => { globalThis[k] = pkg[k] })
       this.flattenMap[name] = keys
+    } else if (alias && globalThis[alias] && typeof globalThis[alias] === "object"){
+      let keys = Object.keys(pkg)
+      keys.forEach(k => { globalThis[alias][k] = pkg[k] })
+      this.flattenMap[name] = { target: alias, keys }
     } else {
       globalThis[alias ?? name] = pkg
     }
@@ -144,9 +148,14 @@ let PackageManager = class {
   globalDelete(name) {
     if (name === "globalThis") throw new Error("Cannot delete globalThis itself")
     this._deactivateOverrides(name)
-    this.flattenMap[name]?.forEach(k => delete globalThis[k])
+    let flat = this.flattenMap[name]
+    if (flat?.target) {
+    flat.keys.forEach(k => { delete globalThis[flat.target][k] })
+    } else {
+      flat?.forEach(k => delete globalThis[k])
+      delete globalThis[name]
+    }
     delete this.flattenMap[name]
-    delete globalThis[name]
   }
 }
 
