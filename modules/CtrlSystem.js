@@ -12,22 +12,23 @@ PM.localAdd("CtrlSystem", (() => {
     },
     override: {
       "TS.tick"(orig) {
-        if (!TS._tasks().length) return
+        let g = TS.gen
+        if (!g.tasks.length) return
         let ctrl = 0
         do {
-          if ((ctrl & 1) && TS._currentTask()) {
-            let t = TS._byId()[TS._currentTask().id]
+          if ((ctrl & 1) && g.currentTask) {
+            let t = g.tasksById[g.currentTask.id]
             if (!t) return
             let res
             try { res = t.gen.next() }
-            catch (e) { TS._removeTask(t); ErrMsg(e); ctrl = consume(); continue }
+            catch (e) { g._removeTask(t); ctrl = consume(); continue }
             ctrl = consume()
-            if (res.done) TS._removeTask(t)
+            if (res.done) g._removeTask(t)
           } else {
             orig()
             ctrl = consume()
           }
-        } while ((ctrl & 2) && TS._tasks().length)
+        } while ((ctrl & 2) && g.tasks.length)
       }
     }
   }
