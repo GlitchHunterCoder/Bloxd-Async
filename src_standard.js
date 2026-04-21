@@ -71,7 +71,7 @@ globalThis.TS = (()=>{
     iters() { return gen.iters() },
     id() { return gen.currentTask?.id ?? null },
     stats() {return { count: gen.tasks.length, current: this.id(), nextId: gen.nextId }},
-    tick() { gen.tick() }
+    tick() { Try(gen.tick(),gen) }
   }
 })()
 
@@ -174,4 +174,4 @@ globalThis.PM = (() => {
   }
 })()
 
-function tick() { Try(TS.tick, TS) }
+function tick() { TS.tick() }
