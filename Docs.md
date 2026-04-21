@@ -170,6 +170,7 @@ TS.stats()
 
 Advances every task by one step. Call this inside the Bloxd tick callback.
 Normally you use the `tick()` helper instead of calling this directly.
+Has convenience wrapper around `TaskScheduler.tick` with error handling via `Try`.
 ```js
 TS.tick()
 ```
@@ -178,10 +179,9 @@ TS.tick()
 
 ## `tick`
 
-Convenience wrapper around `TS.tick` with error handling via `Try`.
 This is what you register with the Bloxd tick callback.
 ```js
-function tick() { Try(TS.tick, TS) }
+function tick() { TS.tick() }
 ```
 
 ---
