@@ -71,7 +71,7 @@ globalThis.TS = (()=>{
     iters() { return gen.iters() },
     id() { return gen.currentTask?.id ?? null },
     stats() {return { count: gen.tasks.length, current: this.id(), nextId: gen.nextId }},
-    tick() { Try(gen.tick(),gen) }
+    tick() { Try(gen.tick, gen) }
   }
 })()
 
