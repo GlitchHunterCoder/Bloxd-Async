@@ -1,17 +1,7 @@
-declare const api: {
-  broadcastMessage: (msg: string, opts?: { color?: string }) => void
-}
+
 type TaskEntry = { id: number; gen: Generator; index: number }
 const GeneratorFunction = function*(){}.constructor as GeneratorFunctionConstructor
 const Generator = function*(){}().constructor
-const ErrMsg = (err: unknown) => {
-  const e = err as Error
-  api.broadcastMessage(`${e.name}: ${e.message}\n${e.stack}`, { color: "red" })
-}
-const Try = (fn: Function, ctx: any = null, ...args: any[]) => {
-  try { fn.apply(ctx, args) }
-  catch (e) { ErrMsg(e) }
-}
 
 class TaskScheduler {
   tasks:       TaskEntry[]
@@ -21,7 +11,7 @@ class TaskScheduler {
   cursor:      number
   tickCount:   number
   constructor() {
-    this.tasks        = []
+    this.tasks       = []
     this.tasksById   = {}
     this.currentTask = null
     this.nextId      = 1
@@ -29,45 +19,44 @@ class TaskScheduler {
     this.tickCount   = 0
   }
   init(task: any, ...params: any[]): Generator {
-    if (task && typeof task.next === "function") return task
-    if (task instanceof GeneratorFunction)       return task(...params)
-    if (typeof task === "function")              return (function* () { return task(...params) })()
+    if (task instanceof Generator) return task
+    if (task instanceof GeneratorFunction) return task(...params)
+    if (task instanceof Function) return (function* () { return task(...params) })()
     return (function* () { return task })()
   }
-  *run(fn: Function, ...params: any[]): any {
-    const gen = this.init(fn, ...params)
-    let result = gen.next()
-    while (!result.done) { yield; result = gen.next() }
+  *run(fn: any, ...params: any[]): any {
+    let gen = this.init(fn, ...params)
+    let result: IteratorResult<unknown, any> = { done: false, value: undefined }
+    while (!result.done) { yield (result = gen.next()) }
     return result.value
   }
   add(gen: Generator): number {
-    const task = { id: this.nextId++, gen, index: this.tasks.length }
+    let task = { id: this.nextId++, gen, index: this.tasks.length }
     this.tasks.push(task)
     this.tasksById[task.id] = task
     return task.id
   }
   delById(id: number) {
-    const task = this.tasksById[id]
+    let task = this.tasksById[id]
     if (task) this._removeTask(task)
   }
   _removeTask(task: TaskEntry) {
-    const last = this.tasks.pop()!
+    let last = this.tasks.pop()!
     if (last !== task) { this.tasks[task.index] = last; last.index = task.index }
     delete this.tasksById[task.id]
-    if (this.cursor >= this.tasks.length) this.cursor = 0
     if (this.currentTask === task) this.currentTask = null
   }
   iters(): number { return this.tickCount }
   tick(): void {
     if (!this.tasks.length) return
     if (this.cursor >= this.tasks.length) this.cursor = 0
-    const task = this.tasks[this.cursor]
+    let task = this.tasks[this.cursor]
     this.currentTask = task
-    try {
-      const res = task.gen.next()
-      if (res.done) this._removeTask(task)
-      else this.cursor = (task.index + 1) % this.tasks.length
-    } catch (e) { this._removeTask(task); ErrMsg(e) }
+    let res;
+    try { res = task.gen.next() }
+    catch (e) { this._removeTask(task); throw e}
+    if (res.done) this._removeTask(task)
+    else this.cursor = (task.index + 1) % this.tasks.length
     this.currentTask = null
     this.tickCount++
   }
@@ -96,7 +85,7 @@ const TS: TSObject = (()=>{
     iters() { return gen.iters() },
     id() { return gen.currentTask?.id ?? null },
     stats() {return { count: gen.tasks.length, current: this.id(), nextId: gen.nextId }},
-    tick() { Try(gen.tick(),gen) }
+    tick() { gen.tick() }
   }
 })()
 
