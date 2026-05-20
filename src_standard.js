@@ -1,30 +1,25 @@
 globalThis.GeneratorFunction = function*(){}.constructor
 globalThis.Generator = function*(){}().constructor
-let ErrMsg = (e) => api.broadcastMessage(`${e.name}: ${e.message}\n${e.stack}`, { color: "red" })
-let Try = (fn, ctx = null, ...args) => {
-  try { fn.apply(ctx, args) }
-  catch (e) { ErrMsg(e) }
-}
 
 let TaskScheduler = class {
   constructor() {
     this.tasks       = []
     this.tasksById   = {}
-    this.currentTask = null
+    this.currentTask = null 
     this.nextId      = 1
     this.cursor      = 0
     this.tickCount   = 0
   }
   init(task, ...params) {
-    if (task && typeof task.next === "function") return task
+    if (task instanceof Generator) return task
     if (task instanceof GeneratorFunction) return task(...params)
-    if (typeof task === "function") return (function* () { return task(...params) })()
+    if (task instanceof Function) return (function* () { return task(...params) })()
     return (function* () { return task })()
   }
   *run(fn, ...params) {
     let gen = this.init(fn, ...params)
-    let result = gen.next()
-    while (!result.done) { yield; result = gen.next() }
+    let result = {done:false}
+    while (!result.done) { yield (result = gen.next()); }
     return result.value
   }
   add(gen) {
@@ -41,7 +36,6 @@ let TaskScheduler = class {
     let last = this.tasks.pop()
     if (last !== task) { this.tasks[task.index] = last; last.index = task.index }
     delete this.tasksById[task.id]
-    if (this.cursor >= this.tasks.length) this.cursor = 0
     if (this.currentTask === task) this.currentTask = null
   }
   iters() { return this.tickCount }
@@ -52,7 +46,7 @@ let TaskScheduler = class {
     this.currentTask = task
     let res;
     try { res = task.gen.next() }
-    catch (e) { this._removeTask(task); ErrMsg(e); return }
+    catch (e) { this._removeTask(task); throw e}
     if (res.done) this._removeTask(task)
     else this.cursor = (task.index + 1) % this.tasks.length
     this.currentTask = null
@@ -71,7 +65,7 @@ globalThis.TS = (()=>{
     iters() { return gen.iters() },
     id() { return gen.currentTask?.id ?? null },
     stats() {return { count: gen.tasks.length, current: this.id(), nextId: gen.nextId }},
-    tick() { Try(gen.tick, gen) }
+    tick() { gen.tick() }
   }
 })()
 
