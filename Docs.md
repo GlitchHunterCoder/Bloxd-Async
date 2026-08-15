@@ -2,351 +2,120 @@
 
 ---
 
-> [!NOTE]
-> **Front End Section**
-> This is made for user code — use this for your scripts
-
----
-
 ## `GeneratorFunction` / `Generator`
 
 Exposes the hidden global constructor objects for generator functions and generator instances.
-Useful for `instanceof` checks and advanced generator manipulation.
+Useful for `instanceof` checks and manual generator handling.
+
 ```js
 fn instanceof GeneratorFunction // true if fn is a generator function
-gen instanceof Generator        // true if gen is a running generator
+gen instanceof Generator        // true if gen is a running (called) generator
 ```
 
----
-
-## `ErrMsg`
-
-Broadcasts a formatted error to the game chat in red.
-```js
-/**
- * @param {Error} e - The error object to display
- * @returns {void}
- */
-ErrMsg(e)
-```
-
----
-
-## `Try`
-
-Runs a function and catches any thrown errors, passing them to `ErrMsg`.
-```js
-/**
- * @param {Function} fn       - Function to run
- * @param {any}      ctx      - `this` context (default: null)
- * @param {...any}   ...args  - Arguments to pass to fn
- * @returns {void}
- */
-Try(fn, ctx, ...args)
-```
+> [!NOTE]
+> A `GeneratorFunction` is your async function. Calling it (`fn()`) is the
+> equivalent of an `async` function returning a promise — it hands you back a
+> paused `Generator` that can be driven forward with `.next()`. There is no
+> normalization step anymore: **you must call the generator function yourself**
+> before handing it to `TS.add`.
 
 ---
 
 ## `TS` — Task Scheduler
 
-The main interface for managing async tasks.
+The scheduler is a doubly linked list keyed by task ID, with a sentinel root
+node at id `0`. This gives O(1) `add`, O(1) `del`, and O(1) single-step `tick`.
 
----
-
-### `TS.init`
-
-Normalises anything into a generator. Accepts a running generator, a generator
-function, a regular function, or a plain value.
 ```js
-/**
- * @param {GeneratorFunction|Function|Generator|any} task
- * @param {...any} ...params - Arguments passed to task if it is a function
- * @returns {Generator}
- */
-TS.init(task, ...params)
+TS = new class {
+    constructor() {
+        this.tasks = {
+            0: { data: null, next: 0, prev: 0 }
+        }
+        this.cursor = 0
+        this.nextId = 1
+    }
+    add(gen) { /* ... */ }
+    del(id)  { /* ... */ }
+    tick()   { /* ... */ }
+}
 ```
 
 ---
 
 ### `TS.add`
 
-Adds a task to the scheduler. Returns the task ID which can be used to cancel it.
+Adds an already-running `Generator` to the scheduler. Returns a stable numeric
+ID which can be used later to cancel it with `TS.del`.
+
 ```js
 /**
- * @param {GeneratorFunction|Function|Generator|any} task
- * @param {...any} ...params    - Arguments passed to task if it is a function
+ * @param {Generator} gen - A called generator function (NOT the function itself)
  * @returns {number} taskId
  */
-TS.add(task, priority, ...params)
+TS.add(gen)
 ```
+
 ```js
-// Examples
-TS.add(function* () {
+// Example
+function* task() {
   console.log("start")
   yield
   console.log("resumed")
-})
+}
 
-TS.add(myGeneratorFn, arg1, arg2)
+TS.add(task()) // note: task() is called here, add() takes the Generator
 ```
+
+> [!WARNING]
+> Passing an uncalled `GeneratorFunction` (e.g. `TS.add(task)` instead of
+> `TS.add(task())`) will throw the first time the scheduler ticks it, since
+> a `GeneratorFunction` has no `.next()` method. There is no longer any
+> normalization to catch this for you.
 
 ---
 
 ### `TS.del`
 
-Cancels and removes a task by its ID.
+Removes a task by ID.
+
 ```js
 /**
  * @param {number} id - Task ID returned from TS.add
- * @returns {void}
+ * @returns {boolean} true if a task was removed, false if the id didn't exist or was 0
  */
 TS.del(id)
 ```
 
----
-
-### `TS.run`
-
-A generator that runs another function to completion, yielding each tick until done.
-Use with `yield*` to await a result inside another task.
-```js
-/**
- * @param {GeneratorFunction|Function} fn
- * @param {...any} ...params
- * @yields until fn is complete
- * @returns {any} return value of fn
- */
-*TS.run(fn, ...params)
-
-// Example
-TS.add(function* () {
-  const result = yield* TS.run(function* () {
-    yield
-    return 42
-  })
-  console.log(result) // 42
-})
-```
-
----
-
-### `TS.id`
-
-Returns the ID of the currently executing task, or `null` if called outside a task.
-```js
-/**
- * @returns {number|null}
- */
-TS.id()
-```
-
----
-
-### `TS.iters`
-
-Returns the total number of ticks that have been processed.
-```js
-/**
- * @returns {number}
- */
-TS.iters()
-```
-
----
-
-### `TS.stats`
-
-Returns a snapshot of the scheduler's current state.
-```js
-/**
- * @returns {{ count: number, current: number|null, nextId: number }}
- */
-TS.stats()
-```
+- `TS.del(0)` always returns `false` — the root/sentinel node can't be deleted.
+- Deleting the currently-running task is safe: the scheduler advances its
+  cursor past the deleted task before continuing.
 
 ---
 
 ### `TS.tick`
 
-Advances every task by one step. Call this inside the Bloxd tick callback.
-Normally you use the `tick()` helper instead of calling this directly.
-Has convenience wrapper around `TaskScheduler.tick` with error handling via `Try`.
+Advances the scheduler by exactly one task. Call this inside the Bloxd tick
+callback.
+
 ```js
 TS.tick()
 ```
+
+Each call steps to the next task in the ring and calls `.next()` on its
+generator. If the generator reports `done`, the task is removed automatically.
+
+> [!NOTE]
+> Because the sentinel node (`0`) lives in the ring alongside real tasks, one
+> tick per full lap is spent passing over it and does nothing. A queue of
+> *N* tasks takes *N + 1* ticks to complete one full round-robin cycle.
 
 ---
 
 ## `tick`
 
-This is what you register with the Bloxd tick callback.
+Register this with the Bloxd tick callback.
+
 ```js
 function tick() { TS.tick() }
 ```
-
----
-
-## `PM` — Package Manager
-
-Manages optional packages that extend the scheduler.
-Packages can add new features, override internal behaviour, and expose globals.
-
----
-
-### `PM.localAdd`
-
-Registers a package locally without exposing anything to `globalThis`.
-If the package has an `override` map, those overrides are activated immediately.
-```js
-/**
- * @param {string} name - Package name
- * @param {object} data - Package object (may include an `override` map)
- * @returns {void}
- */
-PM.localAdd(name, data)
-```
-
----
-
-### `PM.globalAdd`
-
-Exposes a registered package to `globalThis`.
-If `alias` is `"globalThis"`, all keys of the package are flattened onto `globalThis` directly.
-```js
-/**
- * @param {string} name  - Package name (must already be localAdd'd)
- * @param {string} alias - Global name, or "globalThis" to flatten
- * @returns {string[]|any}
- */
-PM.globalAdd(name, alias)
-```
-
----
-
-### `PM.add`
-
-Shorthand for `localAdd` + `globalAdd` in one call.
-```js
-/**
- * @param {string} name  - Package name
- * @param {object} data  - Package object
- * @param {string} alias - Global alias (see globalAdd)
- * @returns {void}
- */
-PM.add(name, data, alias)
-```
-
----
-
-### `PM.localDelete` / `PM.globalDelete` / `PM.delete`
-
-Removes a package. `localDelete` removes it from the registry and deactivates
-its overrides. `globalDelete` removes its globals. `PM.delete` does both.
-```js
-PM.localDelete(name)
-PM.globalDelete(name)
-PM.delete(name)       // both at once
-```
-
----
-
-### `PM.run`
-
-Returns the raw package object by name.
-```js
-/**
- * @param {string} name
- * @returns {object}
- */
-PM.run(name)
-```
-
----
-
-### `PM.override`
-
-Returns the currently active override function for a given path, if any.
-```js
-/**
- * @param {string} path - e.g. "TS.tick", "TS._removeTask"
- * @returns {Function|undefined}
- */
-PM.override(path)
-```
-
----
-
-### Writing a Package
-
-A package is a plain object. If it has an `override` key, each entry intercepts
-a named method. Override functions receive `orig` (the original function, pre-bound)
-as their first argument, followed by the normal call arguments.
-`this` inside an override refers to the package itself.
-```js
-PM.localAdd("myPackage", {
-  myHelper() { ... },
-
-  override: {
-    "TS.tick"(orig) {
-      console.log("before tick")
-      orig()
-      console.log("after tick")
-    },
-    "TS._removeTask"(orig, task) {
-      console.log("removing", task.id)
-      orig(task)
-    }
-  }
-})
-```
-
-**Overrideable paths:**
-
-| Path | When it fires |
-|---|---|
-| `TS.tick` | Every scheduler tick |
-| `TS.add` | When a task is added |
-| `TS.del` | When a task is deleted by ID |
-| `TS._removeTask` | When a task is internally removed (completion or deletion) |
-| `TS.run` | When `TS.run` is called |
-| `TS.init` | When a task is normalised into a generator |
-| `TS.id` | When the current task ID is requested |
-| `TS.stats` | When stats are requested |
-
----
-
-> [!WARNING]
-> **Back End Section**
-> Do not edit unless you know what you are doing
-
----
-
-## `TaskScheduler`
-
-The internal class that drives all scheduling. Not accessed directly in user code —
-interact with it through `TS` and packages.
-
-| Property | Type | Description |
-|---|---|---|
-| `tasks` | `Task[]` | Flat list of all active tasks |
-| `tasksById` | `object` | Map of id → task |
-| `currentTask` | `Task\|null` | The task currently being stepped |
-| `cursor` | `number` | Round-robin position in the task list |
-| `nextId` | `number` | Next task ID to assign |
-| `tickCount` | `number` | Total ticks processed |
-
----
-
-## `PackageManager`
-
-The internal class behind `PM`. Handles package registration, override injection,
-and global namespace management.
-
-The `wrap(target, prefix)` method replaces every function on `target` with a
-proxy that checks `overrideIndex` before calling the original. This is called
-once on `TS` during initialisation.
-
-> [!IMPORTANT]
-> `TaskScheduler.prototype` is **not** wrapped. All overrideable internal methods
-> are exposed through the `TS` shell (`TS._removeTask`, `TS._tasks`, `TS._byId`,
-> `TS._currentTask`) so that overrides always operate on the correct live instance.
