@@ -1,6 +1,6 @@
 # Introduction
 > [!NOTE]
-> For a guide on Async API we have [`LINK HERE`](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/main/Docs.md)
+> For a guide on Async API we have [`Docs.md`](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/main/Docs.md)
 ## Why it was made
 this project exists becuase i saw how under userused and overlooked generator functions were
 and i saw that i could bring async back into bloxd by using them in tandem with a task scheduler
@@ -22,6 +22,10 @@ most implementations of code, setTimeout or even 1 async helper (i see you @WBST
 run 1 function at a time, before moving onto the next, checking if they can run, before doing another one
 my implementations is different in the fact that many functions can run at once,
 and can interact with one another, deciding how and when they run
+
+a `GeneratorFunction` **is** the async function, theres no wrapper or normalisation step anymore
+calling it gives you back a `Generator`, which is the equivilant of a promise/paused thread,
+you call it yourself, then hand the running `Generator` to the scheduler
 
 ### Short Explanation of Generators
 
@@ -65,164 +69,40 @@ console.log(gen.next()) //{value:"after",done:true}
 
 ## All User Features
  - TS functions
-   - `TS.add`: adds a new task to the TaskScheduler
-   - `TS.tick`: used in tick callback
- - small addons
-   - `sleep`: makes code sleep for N milliseconds before continuing operation
-   - `setTimeout, setInterval`: sets a Timeout (code which runs after N milliseconds) or Interval (code which runs at every N millisecond interval)
-   - `clearTimeout, clearInterval`: clears a Timeout or Interval
-   - `queueMicrotask, nextTick, override, idle`: executes code at a different priority level, namely: 1, 2, Infinity, and -Infinity respectively
-   - `await`: pauses the current code and runs function until its finished before giving result back to main function
- - Packages added (can be removed)
-   - Custom `Promise`: sets code which will either resolve or reject at a future point in time
-   - `Channel`: allows code to communicate with each other across task instances
-   - `ThreadManager`: allows code to be ran in a seperate task before being handed back to the main task
- - Bloxd_env.js
-   - used to simulate bloxd tick enviroment outside bloxd for testing
+   - `TS.add`: adds an already-called `Generator` to the scheduler, returns a stable numeric ID
+   - `TS.del`: removes a task by ID; returns `false` if the id didn't exist or was `0`
+   - `TS.tick`: advances the scheduler by one task (used in the tick callback)
 
 ---
 
-## Example User Programs / Addons
-> [!NOTE]
-> These examples are used after the respective packages are installed
+## Example User Programs
+
 ### Running Tasks
 
 ```js
-TS.add(function* () {
+function* myTask() {
   console.log("Task start")
-  yield 
+  yield
   console.log("Task resumed")
-})
-//simple Generator function
+}
+
+TS.add(myTask()) //note: myTask() is called here — TS.add takes a Generator, not a GeneratorFunction
 ```
 
 ---
 
-### Cooperative Waiting (`sleep`)
+### Cancelling a Task
 
 ```js
-TS.add(function* () {
-  console.log("Sleeping...")
-  yield* sleep(1000) //sleeps for 1 second
-  console.log("Awake!")
-})
-```
-
----
-
-### `setTimeout`
-
-```js
-setTimeout(() => {
-  console.log("Timeout fired after 5 seconds")
-}, 5000) //fires after 5 seconds
-```
-
----
-
-### `setInterval`
-
-```js
-let count = 0
-const id = setInterval(() => {
-  console.log("Tick", count++)
-  if (count === 3) clearInterval(id) //clears itself after being executed 3 times
-}, 300)
-```
-
----
-
-### Microtasks (`queueMicrotask`)
-
-```js
-queueMicrotask(() => {
-  console.log("Microtask executed before normal tasks")
-}) //it has a higher Priority
-```
-
----
-
-### Priority Scheduling (`nextTick`, `override`, `idle`)
-
-```js
-idle(() => console.log("Idle task")) //executes last
-setTimeout(() => console.log("Normal task"), 0) //executes third
-nextTick(() => console.log("Next tick")) //executes 2nd
-override(() => console.log("Override task")) //executes first
-```
-
----
-
-### Awaiting a Generator (`await`)
-
-```js
-TS.add(function* () {
-  const result = yield* await(function* () {
-    yield* sleep(200)
-    return 42
-  }) //it awaits a result before continuing main function
-  console.log("Result:", result)
-})
-```
-
----
-
-### Promises (Custom Implementation)
-
-```js
-new Promise((resolve) => {
-  setTimeout(() => resolve("Hello"), 300)
-}).then(value => {
-  console.log(value)
-}) //resolves a promise
-```
-
----
-
-### Promise Utilities
-
-```js
-Promise.all(
-  Promise.resolve(1),
-  Promise.resolve(2)
-).then(console.log) //promise operator
-```
-
----
-
-### Channels (Message Passing)
-
-```js
-TS.add(function* () {
-  Channel.open()
+const id = TS.add((function* () {
   while (true) {
-    const msg = Channel.recv()
-    if (msg !== undefined) {
-      console.log("Received:", msg)
-      break
-    }
+    console.log("looping")
     yield
-  } //waits until it receives a message, then console logs it
-})
+  }
+})())
 
-TS.add(function* () {
-  yield* sleep(100)
-  Channel.send("Hello from another task")
-}) //sending messages to another task
-```
-
----
-
-### ThreadManager (Worker-style Execution)
-
-```js
-TS.add(function* () {
-  const result = yield* ThreadManager.exec(function* () {
-    yield* sleep(200)
-    return "Work done"
-  })
-  console.log(result)
-}) //executes in a different task, before giving result back to main function
+//later, from anywhere:
+TS.del(id)
 ```
 
 ---
@@ -232,156 +112,95 @@ TS.add(function* () {
 ## All Developer Features
 
  - `TaskScheduler`
-   - the backend functionality of TS
- - Priority-based round-robin scheduling
-   - allows you to run code which is executed before less important code
- - Generator normalization (`TS.init`)
-   - automatically turns any given task into a generator
- - Manual tick loop
-   - allows you to easily put into tick as is or modify when ticks get executed
- - Custom Promise iterator protocol
-   - part of the package allows promises to be interacted like a generator
- - Message routing via task IDs
-   - allows ease of sending and receiving by remembering
- - Channel lifecycle management
-   - automatically kills dead tasks (can be disabled in TS.tick)
-
----
-
-## Example Developer Programs / Addons
-
-### Debugging the Scheduler
+   - the backend functionality of `TS`
+   - a doubly linked list of tasks, indexed by id, with a sentinel root node at `0`
+   - O(1) `add`, O(1) `del`, O(1) single-step `tick`
+   - stable IDs: `nextId` only ever increments, so an id always refers to the
+     same task until it's deleted
 
 ```js
-TS.debug(true) //allows debug info to show
-
-TS.add(function* () {
-  yield;
-  console.log(TS.stats()) //shows current runtime stat at that moment
-  yield
-})
-```
-
----
-
-### Writing a Custom Async Abstraction
-
-```js
-function fetchLike(value, delay) {
-  return new Promise(resolve => {
-    setTimeout(() => resolve(value), delay)
-  })
-}
-
-TS.add(function* () {
-  const data = yield* fetchLike("data", 300) //resolves a value after some time
-  console.log(data)
-})
-```
-
----
-
-### Writing a Coroutine-Based State Machine
-
-```js
-function* stateMachine() {
-  console.log("State A")
-  yield
-  console.log("State B")
-  yield
-  console.log("State C")
-}
-
-TS.add(stateMachine) //an easy state machine implementation
-```
-### More Async Addons
-Mutex
-```js
-function Mutex() {
-  let locked = false
-  let queue = []
-  return {
-    *lock() {
-      if (!locked) {
-        locked = true
-        return
-      }
-      const me = TS.id()
-      queue.push(me)
-      while (queue[0] !== me) yield
-      queue.shift()
-      locked = true
-    },
-    unlock() {
-      locked = false
+TS = new class {
+    constructor() {
+        this.tasks = {
+            0: { data: null, next: 0, prev: 0 }
+        }
+        this.cursor = 0
+        this.nextId = 1
     }
-  }
-}
-```
-Actor Model
-```js
-function Actor(handler) {
-  const id = TS.add(function* () {
-    Channel.open(id)
-    while (true) {
-      const msg = Channel.recv(id)
-      if (msg) handler(msg)
-      yield
+
+    add(gen) {
+        let id = this.nextId++
+        let next = this.tasks[this.cursor].next
+        this.tasks[id] = { data: gen, next: next, prev: this.cursor }
+        this.tasks[this.cursor].next = id
+        this.tasks[next].prev = id
+        return id
     }
-  })
-  return {
-    send(msg) { Channel.send(msg, id) }
-  }
+
+    del(id) {
+        if (id === 0) return false
+        let task = this.tasks[id]
+        if (!task) return false
+        this.tasks[task.prev].next = task.next
+        this.tasks[task.next].prev = task.prev
+        if (this.cursor === id) this.cursor = task.next
+        delete this.tasks[id]
+        return true
+    }
+
+    tick() {
+        let id = this.tasks[this.cursor].next
+        this.cursor = id
+        if (id === 0) return
+        let task = this.tasks[id]
+        let result = task.data.next()
+        if (result.done) this.del(id)
+    }
 }
 ```
-Debounce
-```js
-function debounce(fn, ms) {
-  let timer = null
-  return (...args) => {
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => fn(...args), ms)
-  }
-}
-```
+
+> [!NOTE]
+> Because the sentinel node (`0`) sits in the ring itself, one tick per full
+> lap is spent passing over it and does nothing — a queue of *N* tasks takes
+> *N + 1* ticks to complete a full round-robin cycle.
+
 ---
 
-# Outro
+# Removed / Not Yet Ported
 
-## Use Cases
+  `sleep`, `setInterval`/`clearTimeout`/`clearInterval`,
+  `queueMicrotask`/`nextTick`/`override`/`idle`, custom `Promise`
+- `Mutex` / `Actor` / `debounce` addon examples (depended on `TS.id` and/or
+  the package layer)
+- `ErrMsg` / `Try` — error-reporting helpers
+- `Bloxd_env.js` local testing shim (unless it's staying independent of the above)
 
-### This Can Be Used to Make code Run whenever you like, and give coders alot more control over how and when code runs
+If/when any of these get rebuilt on top of the new core, they'll need
+examples written against the current `add`/`del`/`tick` call pattern
+(`TS.add(gen())`, not `TS.add(function* () {...})`).
 
-## Full Example: Everything Together
+## Planned Higher-Level Abstractions
 
-```js
-TS.debug(true)
+`setTimeout`, `Channel`, and `await` are gone as built-in package features,
+but conceptually none of them need to live inside the scheduler itself —
+they're all just generators that `yield` until some condition is met, built
+on top of plain `add`/`del`/`tick`. They may come back in this form:
 
-TS.add(function* main() {
-  console.log("Main start")
+- **`setTimeout`-style delay**: a generator that tracks elapsed ticks (or
+  real time, if you have a clock source) and keeps `yield`ing until the
+  delay has passed, then runs the callback.
+- **`Channel`-style messaging**: a generator that `yield`s until a value
+  shows up in some shared mailbox it polls, letting two tasks hand data to
+  each other without either one blocking the whole scheduler.
+- **`ThreadManager`-style sub-execution**: a generator that owns another
+  `TS.add`ed task, drives it via ticks, and `yield`s until that sub-task is
+  done before handing the result back — essentially `yield*` across task
+  boundaries instead of within one generator.
+- **`await`**: a thin generator wrapper around any of the above (or a
+  promise) that just `yield`s on a loop until the underlying thing resolves.
 
-  setTimeout(() => console.log("Timeout task"), 200)
-
-  queueMicrotask(() => console.log("Microtask"))
-
-  const value = yield* await(function* () {
-    yield* sleep(100)
-    return 99
-  })
-
-  console.log("Awaited value:", value)
-
-  const result = yield* ThreadManager.exec(function* () {
-    yield* sleep(15000)
-    return "Worker result"
-  })
-
-  console.log(result)
-
-  Channel.open()
-  Channel.send("Ping", null)
-
-  yield* sleep(500)
-  console.log("Main end")
-})
-```
+None of this needs privileged access to the scheduler internals — `add`,
+`del`, and `tick` are the only primitives, and everything above is just
+ordinary user code written as a generator. That's the point of the
+rewrite: these become library code on top of `TS`, not special cases baked
+into it.
