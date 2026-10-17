@@ -116,3 +116,20 @@ class Promise {
         else{throw this.value}
     }
 }
+
+Async=(genFn)=>{
+    let fn = (...args)=>new Promise((res,rej)=>{
+        TS.add(function*(){
+            try{
+                res(yield* genFn(...args))
+            }catch(e){
+                rej(e)
+            }
+        }())
+    })
+    Reflect.ownKeys(genFn).map(e=>Object.defineProperty(fn,e,{
+        value:genFn[e]
+    }))
+    fn.__proto__ = genFn.__proto__
+    return fn
+}
