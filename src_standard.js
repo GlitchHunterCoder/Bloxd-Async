@@ -15,6 +15,8 @@ TS = new class {
     }
 
     add(gen) {
+        if(typeof gen === "function"){let og = gen;gen = function*(){og()}()}
+        if(gen.constructor !== Generator){throw new TypeError("argument not a Generator")}
         let id = this.nextId++
         let next = this.tasks[this.cursor].next
         this.tasks[id] = {
@@ -33,18 +35,20 @@ TS = new class {
         if (!task) return false
         this.tasks[task.prev].next = task.next
         this.tasks[task.next].prev = task.prev
-        if (this.cursor === id) this.cursor = task.next
+        if (this.cursor === id) this.cursor = task.prev
         delete this.tasks[id]
         return true
     }
 
     tick() {
-        let id = this.tasks[this.cursor].next
-        this.cursor = id
-        if (id === 0) return
-        let task = this.tasks[id]
-        let result = task.data.next()
-        if (result.done) this.del(id)
+        while(1){
+            let id = this.tasks[this.cursor].next
+            this.cursor = id
+            if (id === 0) return
+            let task = this.tasks[id]
+            let result = task.data.next()
+            if (result.done) this.del(id)
+        }
     }
 }
 
