@@ -16,7 +16,7 @@ TS = new class {
 
     add(gen) {
         if(typeof gen === "function"){let og = gen;gen = function*(){og()}()}
-        if(gen.constructor !== Generator){throw new TypeError("argument not a Generator")}
+        if(gen.constructor !== Generator){throw new TypeError("Argument is not a Generator")}
         let id = this.nextId++
         let next = this.tasks[this.cursor].next
         this.tasks[id] = {
