@@ -17,8 +17,6 @@ class Promise {
                     }else{
                         h.rej( h.onRej ? h.onRej(this.value) : this.value )
                     }
-
-
                 } catch (e) {h.rej(e)}
             })
             this.handlers = []
@@ -28,14 +26,14 @@ class Promise {
             if(this.state !== void 0){return}
             this.state = true
             this.value = value
-            TS.add(()=>runHandler())
+            TS.add(runHandler)
         }
 
         let reject = (value)=>{
             if(this.state !== void 0){return}
             this.state = false
             this.value = value
-            TS.add(()=>runHandler())
+            TS.add(runHandler)
         }
         
         try { callback(resolve, reject) }
