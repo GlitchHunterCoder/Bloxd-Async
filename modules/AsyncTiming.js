@@ -8,7 +8,7 @@ function sleep(ms) {
 function setTimeout(fn, delay, ...params) {
     return TS.add((function* () {
         yield* sleep(delay)
-        yield* TS.run(fn, ...params)
+        fn(...params)
     })())
 }
 
@@ -16,7 +16,7 @@ function setInterval(fn, delay, ...params) {
     return TS.add((function* () {
         while (true) {
             yield* sleep(delay)
-            yield* TS.run(fn, ...params)
+            fn(...params)
         }
     })())
 }
