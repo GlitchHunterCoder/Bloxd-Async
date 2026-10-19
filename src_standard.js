@@ -14,9 +14,8 @@ TS = new class {
         this.nextId = 1
     }
 
-    add(gen) {
-        if(typeof gen === "function"){let og = gen;gen = function*(){og()}()}
-        if(gen.constructor !== Generator){throw new TypeError("Argument is not a Generator")}
+    add(gen, ...params) {
+        gen = TS.run(gen, ...params)
         let id = this.nextId++
         let next = this.tasks[this.cursor].next
         this.tasks[id] = {
@@ -27,6 +26,12 @@ TS = new class {
         this.tasks[this.cursor].next = id
         this.tasks[next].prev = id
         return id
+    }
+
+    run(gen, ...params){
+        if(typeof gen === "function"){gen = gen(...params)}
+        if(gen.constructor !== Generator){gen = function*(A){return A}(gen)}
+        return gen
     }
 
     del(id) {
