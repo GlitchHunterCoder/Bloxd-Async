@@ -1,6 +1,13 @@
 # Introduction
 > [!NOTE]
 > For a guide on Async API we have [`Docs.md`](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/main/Docs.md)
+
+> [!WARNING]
+> Working packages are
+> - [`AsyncTiming`](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/main/modules/AsyncTiming.js)
+> - [`CustomPromise`](https://github.com/GlitchHunterCoder/Bloxd-Async/blob/main/modules/CustomPromise.js)
+> the rest have NOT been converted to new async engine, so use at your own risk
+
 ## Why it was made
 this project exists becuase i saw how under userused and overlooked generator functions were
 and i saw that i could bring async back into bloxd by using them in tandem with a task scheduler
